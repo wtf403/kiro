@@ -1249,12 +1249,8 @@ export function RegisterPage(): React.JSX.Element {
                 ['outlook', 'Outlook'],
                 ['tempmail', t('register.tempmail')],
                 ['ddg', 'DDG + Gmail'],
-                ...(import.meta.env.DEV
-                  ? ([
-                      ['browser-ddg', isEn ? 'Browser (DDG)' : '浏览器 (DDG)'],
-                      ['browser-tempmail', isEn ? 'Browser (TempMail)' : '浏览器 (TempMail)']
-                    ] as [RegMode, string][])
-                  : [])
+                ['browser-ddg', isEn ? 'Browser (DDG)' : '浏览器 (DDG)'],
+                ['browser-tempmail', isEn ? 'Browser (TempMail)' : '浏览器 (TempMail)']
               ] as [RegMode, string][]
             ).map(([m, label]) => (
               <button
@@ -1349,7 +1345,7 @@ export function RegisterPage(): React.JSX.Element {
           )}
 
           {/* TempMail.Plus 自建域名配置 */}
-          {mode === 'tempmail' && (
+          {(mode === 'tempmail' || mode === 'browser-tempmail') && (
             <div className="p-4 bg-muted/30 rounded-lg border border-dashed space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
@@ -1385,7 +1381,7 @@ export function RegisterPage(): React.JSX.Element {
           )}
 
           {/* DuckDuckGo Email Protection + Gmail IMAP 配置 */}
-          {mode === 'ddg' && (
+          {(mode === 'ddg' || mode === 'browser-ddg') && (
             <div className="p-4 bg-muted/30 rounded-lg border border-dashed space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -1430,7 +1426,7 @@ export function RegisterPage(): React.JSX.Element {
             </div>
           )}
 
-          {/* Browser Mode Proxy Config (dev only) */}
+          {/* Browser Mode Proxy Config */}
           {isBrowserMode && (
             <div className="p-4 bg-muted/30 rounded-lg border border-dashed space-y-4">
               <div className="space-y-1.5">
