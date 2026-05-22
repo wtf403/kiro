@@ -1,12 +1,46 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { UserPlus, Mail, Key, Loader2, CheckCircle2, XCircle, Trash2, Play, Square, Clock, RotateCcw, RefreshCw, Download, Settings2, Link2 } from 'lucide-react'
+import {
+  UserPlus,
+  Mail,
+  Key,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Trash2,
+  Play,
+  Square,
+  Clock,
+  RotateCcw,
+  RefreshCw,
+  Download,
+  Settings2,
+  Link2
+} from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useAccountsStore } from '@/store/accounts'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, Badge, Switch } from '../ui'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Label,
+  Progress,
+  Badge,
+  Switch
+} from '../ui'
 import { cn } from '@/lib/utils'
 import { appendSubscriptionLink, updateSubscriptionLink } from './SubscriptionPage'
 
-type RegMode = 'manual' | 'moemail' | 'outlook' | 'tempmail' | 'ddg' | 'browser-ddg' | 'browser-tempmail'
+type RegMode =
+  | 'manual'
+  | 'moemail'
+  | 'outlook'
+  | 'tempmail'
+  | 'ddg'
+  | 'browser-ddg'
+  | 'browser-tempmail'
 type Phase = 'idle' | 'initializing' | 'email' | 'otp' | 'running' | 'done'
 
 interface RegResult {
@@ -23,7 +57,14 @@ interface RegResult {
   verify?: Record<string, unknown>
 }
 
-type BatchItemStatus = 'pending' | 'running' | 'retrying' | 'success' | 'failed' | 'imported' | 'import_failed'
+type BatchItemStatus =
+  | 'pending'
+  | 'running'
+  | 'retrying'
+  | 'success'
+  | 'failed'
+  | 'imported'
+  | 'import_failed'
 
 interface HistoryItem {
   id: string
@@ -50,12 +91,18 @@ const MANUAL_STEPS = ['OIDC', 'Email', 'OTP', 'Done'] as const
 
 function phaseToStep(phase: Phase): number {
   switch (phase) {
-    case 'idle': return -1
-    case 'initializing': return 0
-    case 'email': return 1
-    case 'otp': return 2
-    case 'running': return 1
-    case 'done': return 3
+    case 'idle':
+      return -1
+    case 'initializing':
+      return 0
+    case 'email':
+      return 1
+    case 'otp':
+      return 2
+    case 'running':
+      return 1
+    case 'done':
+      return 3
   }
 }
 
@@ -81,7 +128,8 @@ let _refSetBatchDone: ((v: number) => void) | null = null
 let _refSetBatchSuccess: ((v: number) => void) | null = null
 let _refSetBatchFail: ((v: number) => void) | null = null
 let _refSetBatchItems: ((v: BatchItem[]) => void) | null = null
-let _refSetHistory: ((v: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => void) | null = null
+let _refSetHistory: ((v: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => void) | null =
+  null
 
 function loadHistory(): HistoryItem[] {
   try {
@@ -93,7 +141,11 @@ function loadHistory(): HistoryItem[] {
 }
 
 function saveHistory(items: HistoryItem[]): void {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 100))) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 100)))
+  } catch {
+    /* ignore */
+  }
 }
 
 interface RegisterConfig {
@@ -115,6 +167,9 @@ interface RegisterConfig {
   ddgGmailEmail: string
   ddgGmailAppPassword: string
   proxyUrl: string
+  generateProxyEachTime: boolean
+  proxyCdpAddress: string
+  proxyFormUrl: string
 }
 
 function loadConfig(): Partial<RegisterConfig> {
@@ -127,7 +182,11 @@ function loadConfig(): Partial<RegisterConfig> {
 }
 
 function saveConfig(cfg: RegisterConfig): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg))
+  } catch {
+    /* ignore */
+  }
 }
 
 export function RegisterPage(): React.JSX.Element {
@@ -141,8 +200,14 @@ export function RegisterPage(): React.JSX.Element {
   const [result, _setResult] = useState<RegResult | null>(_result)
   const [imported, setImported] = useState(false)
 
-  const setPhase = useCallback((p: Phase) => { _phase = p; _refSetPhase?.(p) }, [])
-  const setResult = useCallback((r: RegResult | null) => { _result = r; _refSetResult?.(r) }, [])
+  const setPhase = useCallback((p: Phase) => {
+    _phase = p
+    _refSetPhase?.(p)
+  }, [])
+  const setResult = useCallback((r: RegResult | null) => {
+    _result = r
+    _refSetResult?.(r)
+  }, [])
 
   // 手动模式
   const [email, setEmail] = useState('')
@@ -166,6 +231,14 @@ export function RegisterPage(): React.JSX.Element {
   const [ddgGmailEmail, setDdgGmailEmail] = useState(saved.ddgGmailEmail || '')
   const [ddgGmailAppPassword, setDdgGmailAppPassword] = useState(saved.ddgGmailAppPassword || '')
   const [proxyUrl, setProxyUrl] = useState(saved.proxyUrl || '')
+  const [generateProxyEachTime, setGenerateProxyEachTime] = useState(
+    saved.generateProxyEachTime ?? false
+  )
+  const [proxyCdpAddress, setProxyCdpAddress] = useState(saved.proxyCdpAddress || '127.0.0.1:9229')
+  const [proxyFormUrl, setProxyFormUrl] = useState(
+    saved.proxyFormUrl ||
+      'https://colab.research.google.com/drive/1KGMyn4gYBF1qvJj6vnNFFoDRWUJYJw5a'
+  )
 
   const logContainerRef = useRef<HTMLDivElement>(null)
   const { addAccount } = useAccountsStore()
@@ -214,7 +287,8 @@ export function RegisterPage(): React.JSX.Element {
 
   const startManual = async (): Promise<void> => {
     setPhase('initializing')
-    _logs = []; setLogs([])
+    _logs = []
+    setLogs([])
     setResult(null)
     setImported(false)
     addLog(t('register.logManualInit'))
@@ -236,7 +310,10 @@ export function RegisterPage(): React.JSX.Element {
     setPhase('running')
     addLog(`${t('register.logSubmitEmail')} ${email}`)
 
-    const res = await window.api.registrationManualPhase2(email.trim(), fullName.trim() || undefined)
+    const res = await window.api.registrationManualPhase2(
+      email.trim(),
+      fullName.trim() || undefined
+    )
     if (res.success) {
       addLog(t('register.logOtpSent'))
       setPhase('otp')
@@ -256,7 +333,12 @@ export function RegisterPage(): React.JSX.Element {
       const regResult = res.result as RegResult
       setResult(regResult)
       setPhase('done')
-      addHistory({ email: regResult.email, status: regResult.status, password: regResult.password, result: regResult })
+      addHistory({
+        email: regResult.email,
+        status: regResult.status,
+        password: regResult.password,
+        result: regResult
+      })
       if (batchAutoImport && regResult.status === 'success') {
         const ok = await autoImportResult(regResult)
         if (ok) {
@@ -264,7 +346,11 @@ export function RegisterPage(): React.JSX.Element {
           addLog(t('register.logImported'))
           setHistory((prev) => {
             const idx = prev.findIndex((h) => h.email === regResult.email && !h.imported)
-            if (idx >= 0) { const u = [...prev]; u[idx] = { ...u[idx], imported: true }; return u }
+            if (idx >= 0) {
+              const u = [...prev]
+              u[idx] = { ...u[idx], imported: true }
+              return u
+            }
             return prev
           })
         }
@@ -282,18 +368,41 @@ export function RegisterPage(): React.JSX.Element {
 
   const startAuto = async (): Promise<void> => {
     setPhase('running')
-    _logs = []; setLogs([])
+    _logs = []
+    setLogs([])
     setResult(null)
     setImported(false)
-    const modeLabel = mode === 'moemail' ? 'MoEmail' : mode === 'tempmail' ? 'TempMail.Plus' : mode === 'ddg' ? 'DDG + Gmail' : mode === 'browser-ddg' ? 'Browser (DDG)' : mode === 'browser-tempmail' ? 'Browser (TempMail)' : 'Outlook'
+    const modeLabel =
+      mode === 'moemail'
+        ? 'MoEmail'
+        : mode === 'tempmail'
+          ? 'TempMail.Plus'
+          : mode === 'ddg'
+            ? 'DDG + Gmail'
+            : mode === 'browser-ddg'
+              ? 'Browser (DDG)'
+              : mode === 'browser-tempmail'
+                ? 'Browser (TempMail)'
+                : 'Outlook'
     addLog(t('register.logAutoStart').replace('{mode}', modeLabel))
 
     if (isBrowserMode) {
-      const config = buildBrowserConfig()
+      let config: Parameters<typeof window.api.registrationStartBrowser>[0]
+      try {
+        config = await prepareBrowserConfig()
+      } catch (error) {
+        addLog(
+          `${t('register.logStartFailed')} ${error instanceof Error ? error.message : String(error)}`
+        )
+        setPhase('idle')
+        return
+      }
       const res = await window.api.registrationStartBrowser(config)
       if (!res.success) {
         addLog(`${t('register.logStartFailed')} ${res.error}`)
         setPhase('idle')
+      } else if (res.result) {
+        await onRegComplete(res.result as RegResult)
       }
       return
     }
@@ -317,7 +426,9 @@ export function RegisterPage(): React.JSX.Element {
       config.ddgGmailAppPassword = ddgGmailAppPassword
     }
 
-    const res = await window.api.registrationStartAuto(config as Parameters<typeof window.api.registrationStartAuto>[0])
+    const res = await window.api.registrationStartAuto(
+      config as Parameters<typeof window.api.registrationStartAuto>[0]
+    )
     if (!res.success) {
       addLog(`${t('register.logStartFailed')} ${res.error}`)
       setPhase('idle')
@@ -357,9 +468,12 @@ export function RegisterPage(): React.JSX.Element {
         const usage = verifyResult.data.usage
           ? {
               ...verifyResult.data.usage,
-              percentUsed: verifyResult.data.usage.limit > 0
-                ? Math.round((verifyResult.data.usage.current / verifyResult.data.usage.limit) * 100)
-                : 0,
+              percentUsed:
+                verifyResult.data.usage.limit > 0
+                  ? Math.round(
+                      (verifyResult.data.usage.current / verifyResult.data.usage.limit) * 100
+                    )
+                  : 0,
               lastUpdated: now
             }
           : defaultUsage
@@ -380,7 +494,13 @@ export function RegisterPage(): React.JSX.Element {
             expiresAt
           },
           subscription: {
-            type: (verifyResult.data.subscriptionType as 'Free' | 'Pro' | 'Pro_Plus' | 'Enterprise' | 'Teams') || 'Free',
+            type:
+              (verifyResult.data.subscriptionType as
+                | 'Free'
+                | 'Pro'
+                | 'Pro_Plus'
+                | 'Enterprise'
+                | 'Teams') || 'Free',
             title: verifyResult.data.subscriptionTitle || 'Free Tier'
           },
           usage,
@@ -436,46 +556,131 @@ export function RegisterPage(): React.JSX.Element {
   const [autoFetchProLink, setAutoFetchProLink] = useState(saved.autoFetchProLink ?? false)
   const [batchItems, _setBatchItems] = useState<BatchItem[]>(_batchItems)
 
-  const setBatchRunning = (v: boolean) => { _batchRunning = v; _refSetBatchRunning?.(v) }
+  const setBatchRunning = (v: boolean) => {
+    _batchRunning = v
+    _refSetBatchRunning?.(v)
+  }
   const setBatchDone = (v: number | ((p: number) => number)) => {
-    const next = typeof v === 'function' ? v(_batchDone) : v; _batchDone = next; _refSetBatchDone?.(next)
+    const next = typeof v === 'function' ? v(_batchDone) : v
+    _batchDone = next
+    _refSetBatchDone?.(next)
   }
   const setBatchSuccess = (v: number | ((p: number) => number)) => {
-    const next = typeof v === 'function' ? v(_batchSuccess) : v; _batchSuccess = next; _refSetBatchSuccess?.(next)
+    const next = typeof v === 'function' ? v(_batchSuccess) : v
+    _batchSuccess = next
+    _refSetBatchSuccess?.(next)
   }
   const setBatchFail = (v: number | ((p: number) => number)) => {
-    const next = typeof v === 'function' ? v(_batchFail) : v; _batchFail = next; _refSetBatchFail?.(next)
+    const next = typeof v === 'function' ? v(_batchFail) : v
+    _batchFail = next
+    _refSetBatchFail?.(next)
   }
   const setBatchItems = (v: BatchItem[] | ((p: BatchItem[]) => BatchItem[])) => {
-    const next = typeof v === 'function' ? v(_batchItems) : v; _batchItems = next; _refSetBatchItems?.(next)
+    const next = typeof v === 'function' ? v(_batchItems) : v
+    _batchItems = next
+    _refSetBatchItems?.(next)
   }
   const batchAbort = useRef(false)
 
   // 自动保存配置到 localStorage
   useEffect(() => {
-    saveConfig({ mode, moBaseURL, moAPIKey, outlookData, fullName, batchCount, batchInterval, batchAutoImport, batchRetries, batchConcurrency, autoFetchProLink, tempMailEmail, tempMailEpin, tempMailDomain, ddgAuthToken, ddgGmailEmail, ddgGmailAppPassword, proxyUrl })
-  }, [mode, moBaseURL, moAPIKey, outlookData, fullName, batchCount, batchInterval, batchAutoImport, batchRetries, batchConcurrency, autoFetchProLink, tempMailEmail, tempMailEpin, tempMailDomain, ddgAuthToken, ddgGmailEmail, ddgGmailAppPassword, proxyUrl])
+    saveConfig({
+      mode,
+      moBaseURL,
+      moAPIKey,
+      outlookData,
+      fullName,
+      batchCount,
+      batchInterval,
+      batchAutoImport,
+      batchRetries,
+      batchConcurrency,
+      autoFetchProLink,
+      tempMailEmail,
+      tempMailEpin,
+      tempMailDomain,
+      ddgAuthToken,
+      ddgGmailEmail,
+      ddgGmailAppPassword,
+      proxyUrl,
+      generateProxyEachTime,
+      proxyCdpAddress,
+      proxyFormUrl
+    })
+    if (mode === 'browser-ddg' || mode === 'browser-tempmail') {
+      window.api
+        .registrationSaveAutoReplacementConfig({
+          enabled: true,
+          useDDG: mode === 'browser-ddg',
+          ddgAuthToken,
+          ddgGmailEmail,
+          ddgGmailAppPassword,
+          useTempMailPlus: mode === 'browser-tempmail',
+          tempMailPlusEmail: tempMailEmail,
+          tempMailPlusEpin: tempMailEpin,
+          tempMailPlusDomain: tempMailDomain,
+          proxyUrl: proxyUrl.trim() || undefined,
+          generateProxyEachTime,
+          proxyCdpAddress,
+          proxyFormUrl
+        })
+        .catch(() => undefined)
+    } else {
+      window.api.registrationSaveAutoReplacementConfig({ enabled: false }).catch(() => undefined)
+    }
+  }, [
+    mode,
+    moBaseURL,
+    moAPIKey,
+    outlookData,
+    fullName,
+    batchCount,
+    batchInterval,
+    batchAutoImport,
+    batchRetries,
+    batchConcurrency,
+    autoFetchProLink,
+    tempMailEmail,
+    tempMailEpin,
+    tempMailDomain,
+    ddgAuthToken,
+    ddgGmailEmail,
+    ddgGmailAppPassword,
+    proxyUrl,
+    generateProxyEachTime,
+    proxyCdpAddress,
+    proxyFormUrl
+  ])
 
   // ============ 注册历史 ============
 
   const [history, _setHistory] = useState<HistoryItem[]>(loadHistory)
 
-  const setHistory = useCallback((updater: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => {
-    _refSetHistory?.((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      saveHistory(next)
-      return next
-    })
-  }, [])
+  const setHistory = useCallback(
+    (updater: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])) => {
+      _refSetHistory?.((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        saveHistory(next)
+        return next
+      })
+    },
+    []
+  )
 
-  const addHistory = useCallback((item: Omit<HistoryItem, 'id' | 'time' | 'imported'>) => {
-    setHistory((prev) => [{
-      ...item,
-      id: crypto.randomUUID(),
-      time: Date.now(),
-      imported: false
-    }, ...prev])
-  }, [setHistory])
+  const addHistory = useCallback(
+    (item: Omit<HistoryItem, 'id' | 'time' | 'imported'>) => {
+      setHistory((prev) => [
+        {
+          ...item,
+          id: crypto.randomUUID(),
+          time: Date.now(),
+          imported: false
+        },
+        ...prev
+      ])
+    },
+    [setHistory]
+  )
 
   // 注册模块级 setter refs，确保异步代码跨组件生命周期调用最新 setter
   useEffect(() => {
@@ -500,103 +705,130 @@ export function RegisterPage(): React.JSX.Element {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 自动导入单个成功结果
-  const autoImportResult = useCallback(async (regResult: RegResult): Promise<boolean> => {
-    if (!regResult.refreshToken || !regResult.clientId || !regResult.clientSecret) return false
-    try {
-      const now = Date.now()
-      const defaultUsage = { current: 0, limit: 0, percentUsed: 0, lastUpdated: now }
-      // Do NOT call verifyAccountCredentials here — hitting GetUsageLimits immediately
-      // after registration (without a real browser WAF token) triggers account suspension.
-      // Import directly with the tokens we already have from registration.
-      addAccount({
-        email: regResult.email,
-        password: regResult.password,
-        idp: 'BuilderId',
-        status: 'active',
-        credentials: {
-          refreshToken: regResult.refreshToken,
-          clientId: regResult.clientId,
-          clientSecret: regResult.clientSecret,
-          accessToken: regResult.accessToken || '',
-          csrfToken: '',
-          region: regResult.region || 'us-east-1',
-          authMethod: 'IdC' as const,
-          provider: 'BuilderId' as const,
-          expiresAt: now + 3600000
-        },
-        subscription: { type: 'Free', title: 'Free Tier' },
-        usage: defaultUsage,
-        tags: [],
-        lastUsedAt: now
-      })
-      return true
-    } catch {
-      return false
-    }
-  }, [addAccount])
+  const autoImportResult = useCallback(
+    async (regResult: RegResult): Promise<boolean> => {
+      if (!regResult.refreshToken || !regResult.clientId || !regResult.clientSecret) return false
+      try {
+        const now = Date.now()
+        const defaultUsage = { current: 0, limit: 0, percentUsed: 0, lastUpdated: now }
+        // Do NOT call verifyAccountCredentials here — hitting GetUsageLimits immediately
+        // after registration (without a real browser WAF token) triggers account suspension.
+        // Import directly with the tokens we already have from registration.
+        addAccount({
+          email: regResult.email,
+          password: regResult.password,
+          idp: 'BuilderId',
+          status: 'active',
+          credentials: {
+            refreshToken: regResult.refreshToken,
+            clientId: regResult.clientId,
+            clientSecret: regResult.clientSecret,
+            accessToken: regResult.accessToken || '',
+            csrfToken: '',
+            region: regResult.region || 'us-east-1',
+            authMethod: 'IdC' as const,
+            provider: 'BuilderId' as const,
+            expiresAt: now + 3600000
+          },
+          subscription: { type: 'Free', title: 'Free Tier' },
+          usage: defaultUsage,
+          tags: [],
+          lastUsedAt: now
+        })
+        return true
+      } catch {
+        return false
+      }
+    },
+    [addAccount]
+  )
 
   // 获取 Pro 订阅链接并写入订阅页面链接列表
-  const fetchProSubscriptionUrl = useCallback(async (regResult: RegResult, email: string): Promise<string | undefined> => {
-    const accessToken = regResult.accessToken
-    if (!accessToken) return undefined
-    const linkId = crypto.randomUUID()
-    appendSubscriptionLink({ accountId: linkId, email, status: 'loading' })
-    try {
-      addLog(`[Pro Link] ${email}: ${t('register.fetchingProLink')}...`)
-      const result = await window.api.accountGetSubscriptionUrl(
-        accessToken,
-        'Q_DEVELOPER_STANDALONE_PRO',
-        regResult.region || 'us-east-1',
-        undefined,
-        undefined,
-        'BuilderId',
-        'IdC',
-        undefined
-      )
-      if (result.success && result.url) {
-        addLog(`[Pro Link] ${email}: ${result.url}`)
-        updateSubscriptionLink(linkId, { status: 'success', url: result.url })
-        return result.url
+  const fetchProSubscriptionUrl = useCallback(
+    async (regResult: RegResult, email: string): Promise<string | undefined> => {
+      const accessToken = regResult.accessToken
+      if (!accessToken) return undefined
+      const linkId = crypto.randomUUID()
+      appendSubscriptionLink({ accountId: linkId, email, status: 'loading' })
+      try {
+        addLog(`[Pro Link] ${email}: ${t('register.fetchingProLink')}...`)
+        const result = await window.api.accountGetSubscriptionUrl(
+          accessToken,
+          'Q_DEVELOPER_STANDALONE_PRO',
+          regResult.region || 'us-east-1',
+          undefined,
+          undefined,
+          'BuilderId',
+          'IdC',
+          undefined
+        )
+        if (result.success && result.url) {
+          addLog(`[Pro Link] ${email}: ${result.url}`)
+          updateSubscriptionLink(linkId, { status: 'success', url: result.url })
+          return result.url
+        }
+        const errMsg = result.error || 'Failed to get link'
+        addLog(`[Pro Link] ${email}: ${errMsg}`)
+        updateSubscriptionLink(linkId, { status: 'error', error: errMsg })
+        return undefined
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        addLog(`[Pro Link] ${email}: ${errMsg}`)
+        updateSubscriptionLink(linkId, { status: 'error', error: errMsg })
+        return undefined
       }
-      const errMsg = result.error || 'Failed to get link'
-      addLog(`[Pro Link] ${email}: ${errMsg}`)
-      updateSubscriptionLink(linkId, { status: 'error', error: errMsg })
-      return undefined
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err)
-      addLog(`[Pro Link] ${email}: ${errMsg}`)
-      updateSubscriptionLink(linkId, { status: 'error', error: errMsg })
-      return undefined
-    }
-  }, [addLog, t])
+    },
+    [addLog, t]
+  )
 
   // 监听注册完成 - 同时记录到历史 + 自动导入
-  const onRegComplete = useCallback(async (res: RegResult) => {
-    setResult(res)
-    setPhase('done')
-    if (res.status === 'success') {
-      addLog(`${t('register.logRegSuccess')} ${res.email}`)
-      addHistory({ email: res.email, status: 'success', password: res.password, result: res })
-      if (batchAutoImport) {
-        const ok = await autoImportResult(res)
-        if (ok) {
-          setImported(true)
-          addLog(t('register.logImported'))
-          setHistory((prev) => {
-            const idx = prev.findIndex((h) => h.email === res.email && !h.imported)
-            if (idx >= 0) { const u = [...prev]; u[idx] = { ...u[idx], imported: true }; return u }
-            return prev
-          })
+  const onRegComplete = useCallback(
+    async (res: RegResult) => {
+      setResult(res)
+      setPhase('done')
+      if (res.status === 'success') {
+        addLog(`${t('register.logRegSuccess')} ${res.email}`)
+        addHistory({ email: res.email, status: 'success', password: res.password, result: res })
+        if (batchAutoImport) {
+          const ok = await autoImportResult(res)
+          if (ok) {
+            setImported(true)
+            addLog(t('register.logImported'))
+            setHistory((prev) => {
+              const idx = prev.findIndex((h) => h.email === res.email && !h.imported)
+              if (idx >= 0) {
+                const u = [...prev]
+                u[idx] = { ...u[idx], imported: true }
+                return u
+              }
+              return prev
+            })
+          }
         }
+        if (autoFetchProLink) {
+          await fetchProSubscriptionUrl(res, res.email)
+        }
+      } else {
+        addLog(`${t('register.logRegFailed')} ${res.error}`)
+        addHistory({
+          email: res.email,
+          status: res.status,
+          error: res.error,
+          password: res.password,
+          result: res
+        })
       }
-      if (autoFetchProLink) {
-        await fetchProSubscriptionUrl(res, res.email)
-      }
-    } else {
-      addLog(`${t('register.logRegFailed')} ${res.error}`)
-      addHistory({ email: res.email, status: res.status, error: res.error, password: res.password, result: res })
-    }
-  }, [addLog, addHistory, t, batchAutoImport, autoImportResult, autoFetchProLink, fetchProSubscriptionUrl])
+    },
+    [
+      addLog,
+      addHistory,
+      t,
+      batchAutoImport,
+      autoImportResult,
+      autoFetchProLink,
+      fetchProSubscriptionUrl
+    ]
+  )
 
   // 覆盖原有的 onRegistrationComplete 监听
   useEffect(() => {
@@ -605,7 +837,9 @@ export function RegisterPage(): React.JSX.Element {
   }, [onRegComplete])
 
   // 构建自动模式配置
-  const buildAutoConfig = useCallback((): Parameters<typeof window.api.registrationStartAuto>[0] => {
+  const buildAutoConfig = useCallback((): Parameters<
+    typeof window.api.registrationStartAuto
+  >[0] => {
     const config: Record<string, unknown> = {}
     if (mode === 'moemail') {
       config.moEmailBaseURL = moBaseURL
@@ -625,10 +859,23 @@ export function RegisterPage(): React.JSX.Element {
       config.outlookData = outlookData
     }
     return config as Parameters<typeof window.api.registrationStartAuto>[0]
-  }, [mode, moBaseURL, moAPIKey, outlookData, tempMailEmail, tempMailEpin, tempMailDomain, ddgAuthToken, ddgGmailEmail, ddgGmailAppPassword])
+  }, [
+    mode,
+    moBaseURL,
+    moAPIKey,
+    outlookData,
+    tempMailEmail,
+    tempMailEpin,
+    tempMailDomain,
+    ddgAuthToken,
+    ddgGmailEmail,
+    ddgGmailAppPassword
+  ])
 
   // 构建浏览器模式配置
-  const buildBrowserConfig = useCallback((): Parameters<typeof window.api.registrationStartBrowser>[0] => {
+  const buildBrowserConfig = useCallback((): Parameters<
+    typeof window.api.registrationStartBrowser
+  >[0] => {
     const config: Parameters<typeof window.api.registrationStartBrowser>[0] = {}
     if (mode === 'browser-ddg') {
       config.useDDG = true
@@ -643,51 +890,101 @@ export function RegisterPage(): React.JSX.Element {
     }
     if (proxyUrl.trim()) config.proxyUrl = proxyUrl.trim()
     return config
-  }, [mode, ddgAuthToken, ddgGmailEmail, ddgGmailAppPassword, tempMailEmail, tempMailEpin, tempMailDomain, proxyUrl])
+  }, [
+    mode,
+    ddgAuthToken,
+    ddgGmailEmail,
+    ddgGmailAppPassword,
+    tempMailEmail,
+    tempMailEpin,
+    tempMailDomain,
+    proxyUrl
+  ])
+
+  const prepareBrowserConfig = useCallback(
+    async (
+      baseConfig?: Parameters<typeof window.api.registrationStartBrowser>[0]
+    ): Promise<Parameters<typeof window.api.registrationStartBrowser>[0]> => {
+      const config = { ...(baseConfig || buildBrowserConfig()) }
+      if (generateProxyEachTime) {
+        addLog(isEn ? 'Generating new proxy from Colab...' : '正在从 Colab 生成新代理...')
+        const proxyRes = await window.api.registrationGenerateColabProxy({
+          cdpAddress: proxyCdpAddress.trim(),
+          formUrl: proxyFormUrl.trim() || undefined
+        })
+        if (!proxyRes.success || !proxyRes.proxyUrl) {
+          throw new Error(proxyRes.error || 'Proxy generation failed')
+        }
+        config.proxyUrl = proxyRes.proxyUrl
+        setProxyUrl(proxyRes.proxyUrl)
+        addLog(`${isEn ? 'Generated proxy' : '已生成代理'}: ${proxyRes.proxyUrl}`)
+      }
+      return config
+    },
+    [buildBrowserConfig, generateProxyEachTime, proxyCdpAddress, proxyFormUrl, addLog, isEn]
+  )
 
   const isBrowserMode = mode === 'browser-ddg' || mode === 'browser-tempmail'
 
   // 执行单次注册（含重试）
-  const runSingleWithRetry = useCallback(async (
-    itemId: string,
-    taskId: string,
-    maxRetries: number,
-    config: Parameters<typeof window.api.registrationStartAuto>[0]
-  ): Promise<{ success: boolean; result?: RegResult }> => {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      if (batchAbort.current) return { success: false }
+  const runSingleWithRetry = useCallback(
+    async (
+      itemId: string,
+      taskId: string,
+      maxRetries: number,
+      config: Parameters<typeof window.api.registrationStartAuto>[0]
+    ): Promise<{ success: boolean; result?: RegResult }> => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (batchAbort.current) return { success: false }
 
-      if (attempt > 0) {
-        setBatchItems((prev) => prev.map((it) =>
-          it.id === itemId ? { ...it, status: 'retrying' as BatchItemStatus, retryCount: attempt } : it
-        ))
-        addLog(t('register.batchRetrying').replace('{current}', String(attempt)).replace('{max}', String(maxRetries)))
-        await new Promise((r) => setTimeout(r, 3000))
-      } else {
-        setBatchItems((prev) => prev.map((it) =>
-          it.id === itemId ? { ...it, status: 'running' as BatchItemStatus } : it
-        ))
-      }
-
-      const isBrowser = isBrowserMode
-      const res = isBrowser
-        ? await window.api.registrationStartBrowser({ ...(config as Parameters<typeof window.api.registrationStartBrowser>[0]), taskId })
-        : await window.api.registrationStartAuto({ ...config, taskId } as typeof config)
-
-      if (res.success && res.result) {
-        const regResult = res.result as RegResult
-        if (regResult.status === 'success') {
-          return { success: true, result: regResult }
+        if (attempt > 0) {
+          setBatchItems((prev) =>
+            prev.map((it) =>
+              it.id === itemId
+                ? { ...it, status: 'retrying' as BatchItemStatus, retryCount: attempt }
+                : it
+            )
+          )
+          addLog(
+            t('register.batchRetrying')
+              .replace('{current}', String(attempt))
+              .replace('{max}', String(maxRetries))
+          )
+          await new Promise((r) => setTimeout(r, 3000))
+        } else {
+          setBatchItems((prev) =>
+            prev.map((it) =>
+              it.id === itemId ? { ...it, status: 'running' as BatchItemStatus } : it
+            )
+          )
         }
-        if (attempt === maxRetries) {
-          return { success: false, result: regResult }
+
+        const isBrowser = isBrowserMode
+        const res = isBrowser
+          ? await window.api.registrationStartBrowser({
+              ...(await prepareBrowserConfig(
+                config as Parameters<typeof window.api.registrationStartBrowser>[0]
+              )),
+              taskId
+            })
+          : await window.api.registrationStartAuto({ ...config, taskId } as typeof config)
+
+        if (res.success && res.result) {
+          const regResult = res.result as RegResult
+          if (regResult.status === 'success') {
+            return { success: true, result: regResult }
+          }
+          if (attempt === maxRetries) {
+            return { success: false, result: regResult }
+          }
+        } else if (!res.success) {
+          if (attempt === maxRetries) return { success: false }
         }
-      } else if (!res.success) {
-        if (attempt === maxRetries) return { success: false }
       }
-    }
-    return { success: false }
-  }, [addLog, t, isBrowserMode])
+      return { success: false }
+    },
+    [addLog, t, isBrowserMode, prepareBrowserConfig]
+  )
 
   // 处理单个批量注册任务完成
   const handleBatchOutcome = async (
@@ -696,16 +993,25 @@ export function RegisterPage(): React.JSX.Element {
   ): Promise<void> => {
     if (outcome.success && outcome.result) {
       setBatchSuccess((p) => p + 1)
-      setBatchItems((prev) => prev.map((it) =>
-        it.id === itemId ? { ...it, status: 'success', email: outcome.result!.email } : it
-      ))
-      addHistory({ email: outcome.result.email, status: 'success', password: outcome.result.password, result: outcome.result })
+      setBatchItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId ? { ...it, status: 'success', email: outcome.result!.email } : it
+        )
+      )
+      addHistory({
+        email: outcome.result.email,
+        status: 'success',
+        password: outcome.result.password,
+        result: outcome.result
+      })
 
       if (batchAutoImport) {
         const imported = await autoImportResult(outcome.result)
-        setBatchItems((prev) => prev.map((it) =>
-          it.id === itemId ? { ...it, status: imported ? 'imported' : 'import_failed' } : it
-        ))
+        setBatchItems((prev) =>
+          prev.map((it) =>
+            it.id === itemId ? { ...it, status: imported ? 'imported' : 'import_failed' } : it
+          )
+        )
         if (imported) {
           addLog(t('register.logImported'))
           setHistory((prev) => {
@@ -726,9 +1032,11 @@ export function RegisterPage(): React.JSX.Element {
       setBatchFail((p) => p + 1)
       const errEmail = outcome.result?.email || ''
       const errMsg = outcome.result?.error || 'unknown'
-      setBatchItems((prev) => prev.map((it) =>
-        it.id === itemId ? { ...it, status: 'failed', email: errEmail, error: errMsg } : it
-      ))
+      setBatchItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId ? { ...it, status: 'failed', email: errEmail, error: errMsg } : it
+        )
+      )
       if (outcome.result) {
         addHistory({ email: errEmail, status: 'failed', error: errMsg })
       }
@@ -765,7 +1073,11 @@ export function RegisterPage(): React.JSX.Element {
 
     for (let i = 0; i < batchCount; i++) {
       if (batchAbort.current) {
-        addLog(t('register.batchStopped').replace('{done}', String(launched)).replace('{total}', String(batchCount)))
+        addLog(
+          t('register.batchStopped')
+            .replace('{done}', String(launched))
+            .replace('{total}', String(batchCount))
+        )
         break
       }
 
@@ -825,28 +1137,78 @@ export function RegisterPage(): React.JSX.Element {
       const defaultUsage = { current: 0, limit: 0, percentUsed: 0, lastUpdated: now }
 
       if (verifyResult.success && verifyResult.data) {
-        const expiresAt = verifyResult.data.expiresIn ? now + verifyResult.data.expiresIn * 1000 : now + 3600000
+        const expiresAt = verifyResult.data.expiresIn
+          ? now + verifyResult.data.expiresIn * 1000
+          : now + 3600000
         const usage = verifyResult.data.usage
-          ? { ...verifyResult.data.usage, percentUsed: verifyResult.data.usage.limit > 0 ? Math.round((verifyResult.data.usage.current / verifyResult.data.usage.limit) * 100) : 0, lastUpdated: now }
+          ? {
+              ...verifyResult.data.usage,
+              percentUsed:
+                verifyResult.data.usage.limit > 0
+                  ? Math.round(
+                      (verifyResult.data.usage.current / verifyResult.data.usage.limit) * 100
+                    )
+                  : 0,
+              lastUpdated: now
+            }
           : defaultUsage
 
         addAccount({
           email: verifyResult.data.email || r.email,
-          idp: 'BuilderId', status: 'active',
-          credentials: { refreshToken: r.refreshToken!, clientId: r.clientId!, clientSecret: r.clientSecret!, accessToken: verifyResult.data.accessToken || r.accessToken || '', csrfToken: '', region: r.region || 'us-east-1', authMethod: 'IdC' as const, provider: 'BuilderId' as const, expiresAt },
-          subscription: { type: (verifyResult.data.subscriptionType as 'Free' | 'Pro' | 'Pro_Plus' | 'Enterprise' | 'Teams') || 'Free', title: verifyResult.data.subscriptionTitle || 'Free Tier' },
-          usage, tags: [], lastUsedAt: now
+          idp: 'BuilderId',
+          status: 'active',
+          credentials: {
+            refreshToken: r.refreshToken!,
+            clientId: r.clientId!,
+            clientSecret: r.clientSecret!,
+            accessToken: verifyResult.data.accessToken || r.accessToken || '',
+            csrfToken: '',
+            region: r.region || 'us-east-1',
+            authMethod: 'IdC' as const,
+            provider: 'BuilderId' as const,
+            expiresAt
+          },
+          subscription: {
+            type:
+              (verifyResult.data.subscriptionType as
+                | 'Free'
+                | 'Pro'
+                | 'Pro_Plus'
+                | 'Enterprise'
+                | 'Teams') || 'Free',
+            title: verifyResult.data.subscriptionTitle || 'Free Tier'
+          },
+          usage,
+          tags: [],
+          lastUsedAt: now
         })
       } else {
         addAccount({
-          email: r.email, idp: 'BuilderId', status: 'active',
-          credentials: { refreshToken: r.refreshToken!, clientId: r.clientId!, clientSecret: r.clientSecret!, accessToken: r.accessToken || '', csrfToken: '', region: r.region || 'us-east-1', authMethod: 'IdC' as const, provider: 'BuilderId' as const, expiresAt: now + 3600000 },
-          subscription: { type: 'Free', title: 'Free Tier' }, usage: defaultUsage, tags: [], lastUsedAt: now
+          email: r.email,
+          idp: 'BuilderId',
+          status: 'active',
+          credentials: {
+            refreshToken: r.refreshToken!,
+            clientId: r.clientId!,
+            clientSecret: r.clientSecret!,
+            accessToken: r.accessToken || '',
+            csrfToken: '',
+            region: r.region || 'us-east-1',
+            authMethod: 'IdC' as const,
+            provider: 'BuilderId' as const,
+            expiresAt: now + 3600000
+          },
+          subscription: { type: 'Free', title: 'Free Tier' },
+          usage: defaultUsage,
+          tags: [],
+          lastUsedAt: now
         })
       }
 
-      setHistory((prev) => prev.map((h) => h.id === item.id ? { ...h, imported: true } : h))
-    } catch { /* ignore */ }
+      setHistory((prev) => prev.map((h) => (h.id === item.id ? { ...h, imported: true } : h)))
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -861,7 +1223,11 @@ export function RegisterPage(): React.JSX.Element {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-primary">{t('register.title')}</h1>
-            <p className="text-sm text-muted-foreground">{isEn ? 'Register new Kiro accounts automatically or manually' : '自动或手动注册新的 Kiro 账号'}</p>
+            <p className="text-sm text-muted-foreground">
+              {isEn
+                ? 'Register new Kiro accounts automatically or manually'
+                : '自动或手动注册新的 Kiro 账号'}
+            </p>
           </div>
         </div>
       </div>
@@ -876,17 +1242,21 @@ export function RegisterPage(): React.JSX.Element {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-            {([
-              ['manual', t('register.manual')],
-              ['moemail', 'MoEmail'],
-              ['outlook', 'Outlook'],
-              ['tempmail', t('register.tempmail')],
-              ['ddg', 'DDG + Gmail'],
-              ...(import.meta.env.DEV ? [
-                ['browser-ddg', isEn ? 'Browser (DDG)' : '浏览器 (DDG)'],
-                ['browser-tempmail', isEn ? 'Browser (TempMail)' : '浏览器 (TempMail)']
-              ] as [RegMode, string][] : [])
-            ] as [RegMode, string][]).map(([m, label]) => (
+            {(
+              [
+                ['manual', t('register.manual')],
+                ['moemail', 'MoEmail'],
+                ['outlook', 'Outlook'],
+                ['tempmail', t('register.tempmail')],
+                ['ddg', 'DDG + Gmail'],
+                ...(import.meta.env.DEV
+                  ? ([
+                      ['browser-ddg', isEn ? 'Browser (DDG)' : '浏览器 (DDG)'],
+                      ['browser-tempmail', isEn ? 'Browser (TempMail)' : '浏览器 (TempMail)']
+                    ] as [RegMode, string][])
+                  : [])
+              ] as [RegMode, string][]
+            ).map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -903,7 +1273,6 @@ export function RegisterPage(): React.JSX.Element {
             ))}
           </div>
 
-
           {/* 自动导入开关 */}
           <div className="flex items-center gap-3">
             <Switch
@@ -914,7 +1283,9 @@ export function RegisterPage(): React.JSX.Element {
             <div className="flex items-center gap-2">
               <Download className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">{t('register.batchAutoImport')}</span>
-              <span className="text-xs text-muted-foreground">— {t('register.batchAutoImportDesc')}</span>
+              <span className="text-xs text-muted-foreground">
+                — {t('register.batchAutoImportDesc')}
+              </span>
             </div>
           </div>
 
@@ -928,7 +1299,9 @@ export function RegisterPage(): React.JSX.Element {
             <div className="flex items-center gap-2">
               <Link2 className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">{t('register.autoFetchProLink')}</span>
-              <span className="text-xs text-muted-foreground">— {t('register.autoFetchProLinkDesc')}</span>
+              <span className="text-xs text-muted-foreground">
+                — {t('register.autoFetchProLinkDesc')}
+              </span>
             </div>
           </div>
 
@@ -945,7 +1318,9 @@ export function RegisterPage(): React.JSX.Element {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>{t('register.moApiKey')} ({t('register.optional')})</Label>
+                <Label>
+                  {t('register.moApiKey')} ({t('register.optional')})
+                </Label>
                 <Input
                   type="password"
                   value={moAPIKey}
@@ -959,7 +1334,9 @@ export function RegisterPage(): React.JSX.Element {
           {/* Outlook 配置 */}
           {mode === 'outlook' && (
             <div className="p-4 bg-muted/30 rounded-lg border border-dashed space-y-1.5">
-              <Label>{t('register.outlookAccounts')} ({t('register.outlookFormat')})</Label>
+              <Label>
+                {t('register.outlookAccounts')} ({t('register.outlookFormat')})
+              </Label>
               <textarea
                 value={outlookData}
                 onChange={(e) => setOutlookData(e.target.value)}
@@ -1037,7 +1414,11 @@ export function RegisterPage(): React.JSX.Element {
                   type="password"
                   value={ddgGmailAppPassword}
                   onChange={(e) => setDdgGmailAppPassword(e.target.value)}
-                  placeholder={isEn ? '16-char app password (Settings → Security → App passwords)' : '16位应用专用密码（设置 → 安全 → 应用专用密码）'}
+                  placeholder={
+                    isEn
+                      ? '16-char app password (Settings → Security → App passwords)'
+                      : '16位应用专用密码（设置 → 安全 → 应用专用密码）'
+                  }
                   disabled={isRunning || batchRunning}
                 />
               </div>
@@ -1057,14 +1438,55 @@ export function RegisterPage(): React.JSX.Element {
                 <Input
                   value={proxyUrl}
                   onChange={(e) => setProxyUrl(e.target.value)}
-                  placeholder={isEn ? 'http://user:pass@host:port or socks5://host:port' : 'http://user:pass@host:port 或 socks5://host:port'}
+                  placeholder={
+                    isEn
+                      ? 'http://user:pass@host:port or socks5://host:port'
+                      : 'http://user:pass@host:port 或 socks5://host:port'
+                  }
                   disabled={isRunning || batchRunning}
                 />
               </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label>{isEn ? 'Generate new proxy each time' : '每次生成新代理'}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {isEn
+                      ? 'Uses an existing Chrome CDP session with the Colab notebook.'
+                      : '使用已有 Chrome CDP 会话和 Colab 笔记本。'}
+                  </p>
+                </div>
+                <Switch
+                  checked={generateProxyEachTime}
+                  onCheckedChange={setGenerateProxyEachTime}
+                  disabled={isRunning || batchRunning}
+                />
+              </div>
+              {generateProxyEachTime && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>{isEn ? 'CDP address' : 'CDP 地址'}</Label>
+                    <Input
+                      value={proxyCdpAddress}
+                      onChange={(e) => setProxyCdpAddress(e.target.value)}
+                      placeholder="127.0.0.1:9229"
+                      disabled={isRunning || batchRunning}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{isEn ? 'Colab notebook URL' : 'Colab 笔记本 URL'}</Label>
+                    <Input
+                      value={proxyFormUrl}
+                      onChange={(e) => setProxyFormUrl(e.target.value)}
+                      placeholder="https://colab.research.google.com/drive/..."
+                      disabled={isRunning || batchRunning}
+                    />
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 {isEn
-                  ? 'Browser mode uses real Chromium to bypass AWS WAF bot detection. Proxy is optional.'
-                  : '浏览器模式使用真实 Chromium 绕过 AWS WAF 机器人检测。代理为可选项。'}
+                  ? 'Start Chrome with --remote-debugging-port=9229 and keep the Colab notebook signed in.'
+                  : '用 --remote-debugging-port=9229 启动 Chrome，并保持 Colab 笔记本已登录。'}
               </p>
             </div>
           )}
@@ -1077,16 +1499,26 @@ export function RegisterPage(): React.JSX.Element {
           <div className="flex items-center justify-between">
             {MANUAL_STEPS.map((step, i) => (
               <div key={step} className="flex items-center flex-1">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-colors ${
-                  i < currentStep ? 'bg-green-500 text-white'
-                    : i === currentStep ? 'bg-primary text-primary-foreground animate-pulse'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-colors ${
+                    i < currentStep
+                      ? 'bg-green-500 text-white'
+                      : i === currentStep
+                        ? 'bg-primary text-primary-foreground animate-pulse'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
                   {i < currentStep ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                 </div>
-                <span className={`ml-2 text-xs font-medium ${i <= currentStep ? 'text-foreground' : 'text-muted-foreground'}`}>{step}</span>
+                <span
+                  className={`ml-2 text-xs font-medium ${i <= currentStep ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
+                  {step}
+                </span>
                 {i < MANUAL_STEPS.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-3 ${i < currentStep ? 'bg-green-500' : 'bg-muted'}`} />
+                  <div
+                    className={`flex-1 h-0.5 mx-3 ${i < currentStep ? 'bg-green-500' : 'bg-muted'}`}
+                  />
                 )}
               </div>
             ))}
@@ -1156,10 +1588,18 @@ export function RegisterPage(): React.JSX.Element {
                 disabled={
                   (mode === 'moemail' && !moBaseURL) ||
                   (mode === 'outlook' && !outlookData.trim()) ||
-                  (mode === 'tempmail' && (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim())) ||
-                  (mode === 'ddg' && (!ddgAuthToken.trim() || !ddgGmailEmail.trim() || !ddgGmailAppPassword.trim())) ||
-                  (mode === 'browser-ddg' && (!ddgAuthToken.trim() || !ddgGmailEmail.trim() || !ddgGmailAppPassword.trim())) ||
-                  (mode === 'browser-tempmail' && (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim()))
+                  (mode === 'tempmail' &&
+                    (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim())) ||
+                  (mode === 'ddg' &&
+                    (!ddgAuthToken.trim() ||
+                      !ddgGmailEmail.trim() ||
+                      !ddgGmailAppPassword.trim())) ||
+                  (mode === 'browser-ddg' &&
+                    (!ddgAuthToken.trim() ||
+                      !ddgGmailEmail.trim() ||
+                      !ddgGmailAppPassword.trim())) ||
+                  (mode === 'browser-tempmail' &&
+                    (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim()))
                 }
               >
                 <Play className="h-4 w-4 mr-2" />
@@ -1206,10 +1646,17 @@ export function RegisterPage(): React.JSX.Element {
               <div className="space-y-1">
                 <Label className="text-xs">{t('register.batchCount')}</Label>
                 <Input
-                  type="number" min={1} max={100}
+                  type="number"
+                  min={1}
+                  max={100}
                   value={batchCount}
-                  onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setBatchCount(v) }}
-                  onBlur={() => { if (batchCount < 1) setBatchCount(1) }}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 1) setBatchCount(v)
+                  }}
+                  onBlur={() => {
+                    if (batchCount < 1) setBatchCount(1)
+                  }}
                   disabled={batchRunning}
                   className="w-24"
                 />
@@ -1217,9 +1664,14 @@ export function RegisterPage(): React.JSX.Element {
               <div className="space-y-1">
                 <Label className="text-xs">{t('register.batchInterval')}</Label>
                 <Input
-                  type="number" min={0} max={300}
+                  type="number"
+                  min={0}
+                  max={300}
                   value={batchInterval}
-                  onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) setBatchInterval(v) }}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 0) setBatchInterval(v)
+                  }}
                   disabled={batchRunning}
                   className="w-24"
                 />
@@ -1227,9 +1679,14 @@ export function RegisterPage(): React.JSX.Element {
               <div className="space-y-1">
                 <Label className="text-xs">{t('register.batchRetries')}</Label>
                 <Input
-                  type="number" min={0} max={10}
+                  type="number"
+                  min={0}
+                  max={10}
                   value={batchRetries}
-                  onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) setBatchRetries(v) }}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 0) setBatchRetries(v)
+                  }}
                   disabled={batchRunning}
                   className="w-24"
                 />
@@ -1237,10 +1694,17 @@ export function RegisterPage(): React.JSX.Element {
               <div className="space-y-1">
                 <Label className="text-xs">{t('register.batchConcurrency')}</Label>
                 <Input
-                  type="number" min={1} max={100}
+                  type="number"
+                  min={1}
+                  max={100}
                   value={batchConcurrency}
-                  onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setBatchConcurrency(v) }}
-                  onBlur={() => { if (batchConcurrency < 1) setBatchConcurrency(1) }}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 1) setBatchConcurrency(v)
+                  }}
+                  onBlur={() => {
+                    if (batchConcurrency < 1) setBatchConcurrency(1)
+                  }}
                   disabled={batchRunning}
                   className="w-24"
                 />
@@ -1252,13 +1716,31 @@ export function RegisterPage(): React.JSX.Element {
                   (!batchRunning && isRunning) ||
                   (mode === 'moemail' && !moBaseURL) ||
                   (mode === 'outlook' && !outlookData.trim()) ||
-                  (mode === 'tempmail' && (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim())) ||
-                  (mode === 'ddg' && (!ddgAuthToken.trim() || !ddgGmailEmail.trim() || !ddgGmailAppPassword.trim())) ||
-                  (mode === 'browser-ddg' && (!ddgAuthToken.trim() || !ddgGmailEmail.trim() || !ddgGmailAppPassword.trim())) ||
-                  (mode === 'browser-tempmail' && (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim()))
+                  (mode === 'tempmail' &&
+                    (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim())) ||
+                  (mode === 'ddg' &&
+                    (!ddgAuthToken.trim() ||
+                      !ddgGmailEmail.trim() ||
+                      !ddgGmailAppPassword.trim())) ||
+                  (mode === 'browser-ddg' &&
+                    (!ddgAuthToken.trim() ||
+                      !ddgGmailEmail.trim() ||
+                      !ddgGmailAppPassword.trim())) ||
+                  (mode === 'browser-tempmail' &&
+                    (!tempMailDomain.trim() || !tempMailEmail.trim() || !tempMailEpin.trim()))
                 }
               >
-                {batchRunning ? <><Square className="h-4 w-4 mr-2" />{t('register.batchStop')}</> : <><Play className="h-4 w-4 mr-2" />{t('register.batchStart')}</>}
+                {batchRunning ? (
+                  <>
+                    <Square className="h-4 w-4 mr-2" />
+                    {t('register.batchStop')}
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    {t('register.batchStart')}
+                  </>
+                )}
               </Button>
             </div>
 
@@ -1266,41 +1748,85 @@ export function RegisterPage(): React.JSX.Element {
             {(batchRunning || batchDone > 0) && (
               <div className="space-y-3">
                 <div className="flex items-center gap-4 text-sm">
-                  <span className="font-medium">{t('register.batchProgress')}: {batchDone}/{batchCount}</span>
-                  <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-950/30">{t('register.batchSuccess')}: {batchSuccess}</Badge>
-                  <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 dark:bg-red-950/30">{t('register.batchFail')}: {batchFail}</Badge>
+                  <span className="font-medium">
+                    {t('register.batchProgress')}: {batchDone}/{batchCount}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="text-green-600 border-green-200 bg-green-50 dark:bg-green-950/30"
+                  >
+                    {t('register.batchSuccess')}: {batchSuccess}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="text-red-600 border-red-200 bg-red-50 dark:bg-red-950/30"
+                  >
+                    {t('register.batchFail')}: {batchFail}
+                  </Badge>
                 </div>
-                <Progress value={batchCount > 0 ? (batchDone / batchCount) * 100 : 0} className="h-2" />
+                <Progress
+                  value={batchCount > 0 ? (batchDone / batchCount) * 100 : 0}
+                  className="h-2"
+                />
 
                 {/* 每项状态列表 */}
                 {batchItems.length > 0 && (
                   <div className="max-h-40 overflow-y-auto border rounded-lg bg-muted/20">
                     {batchItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between px-3 py-1.5 border-b last:border-b-0 text-xs hover:bg-muted/50 transition-colors">
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between px-3 py-1.5 border-b last:border-b-0 text-xs hover:bg-muted/50 transition-colors"
+                      >
                         <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground w-6 text-right">#{item.index}</span>
-                          {item.status === 'pending' && <span className="text-muted-foreground">—</span>}
-                          {item.status === 'running' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
-                          {item.status === 'retrying' && <RefreshCw className="h-3 w-3 animate-spin text-yellow-500" />}
-                          {item.status === 'success' && <CheckCircle2 className="h-3 w-3 text-green-500" />}
-                          {item.status === 'imported' && <Download className="h-3 w-3 text-green-600" />}
+                          <span className="text-muted-foreground w-6 text-right">
+                            #{item.index}
+                          </span>
+                          {item.status === 'pending' && (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {item.status === 'running' && (
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                          )}
+                          {item.status === 'retrying' && (
+                            <RefreshCw className="h-3 w-3 animate-spin text-yellow-500" />
+                          )}
+                          {item.status === 'success' && (
+                            <CheckCircle2 className="h-3 w-3 text-green-500" />
+                          )}
+                          {item.status === 'imported' && (
+                            <Download className="h-3 w-3 text-green-600" />
+                          )}
                           {item.status === 'failed' && <XCircle className="h-3 w-3 text-red-500" />}
-                          {item.status === 'import_failed' && <XCircle className="h-3 w-3 text-orange-500" />}
+                          {item.status === 'import_failed' && (
+                            <XCircle className="h-3 w-3 text-orange-500" />
+                          )}
                           {item.email && <span className="font-mono">{item.email}</span>}
                         </div>
-                        <span className={cn('text-xs',
-                          (item.status === 'success' || item.status === 'imported') && 'text-green-600',
-                          (item.status === 'failed' || item.status === 'import_failed') && 'text-red-500',
-                          item.status === 'retrying' && 'text-yellow-600',
-                          (item.status === 'pending' || item.status === 'running') && 'text-muted-foreground'
-                        )}>
-                          {item.status === 'pending' ? '' :
-                           item.status === 'running' ? t('register.processing') :
-                           item.status === 'retrying' ? `${t('register.batchItemRetrying')} (${item.retryCount})` :
-                           item.status === 'success' ? t('register.batchItemSuccess') :
-                           item.status === 'imported' ? t('register.batchItemImported') :
-                           item.status === 'import_failed' ? t('register.batchItemImportFailed') :
-                           item.error || t('register.batchItemFailed')}
+                        <span
+                          className={cn(
+                            'text-xs',
+                            (item.status === 'success' || item.status === 'imported') &&
+                              'text-green-600',
+                            (item.status === 'failed' || item.status === 'import_failed') &&
+                              'text-red-500',
+                            item.status === 'retrying' && 'text-yellow-600',
+                            (item.status === 'pending' || item.status === 'running') &&
+                              'text-muted-foreground'
+                          )}
+                        >
+                          {item.status === 'pending'
+                            ? ''
+                            : item.status === 'running'
+                              ? t('register.processing')
+                              : item.status === 'retrying'
+                                ? `${t('register.batchItemRetrying')} (${item.retryCount})`
+                                : item.status === 'success'
+                                  ? t('register.batchItemSuccess')
+                                  : item.status === 'imported'
+                                    ? t('register.batchItemImported')
+                                    : item.status === 'import_failed'
+                                      ? t('register.batchItemImportFailed')
+                                      : item.error || t('register.batchItemFailed')}
                         </span>
                       </div>
                     ))}
@@ -1314,9 +1840,14 @@ export function RegisterPage(): React.JSX.Element {
 
       {/* 结果 */}
       {result && (
-        <Card className={cn('border shadow-sm',
-          result.status === 'success' ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-        )}>
+        <Card
+          className={cn(
+            'border shadow-sm',
+            result.status === 'success'
+              ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+          )}
+        >
           <CardContent className="pt-5 space-y-3">
             <div className="flex items-center gap-2">
               {result.status === 'success' ? (
@@ -1336,8 +1867,14 @@ export function RegisterPage(): React.JSX.Element {
             {result.status === 'success' && (
               <>
                 <div className="grid grid-cols-2 gap-3 text-sm p-3 bg-background/50 rounded-lg">
-                  <div><span className="text-muted-foreground">{t('register.emailField')}</span> <span className="font-mono font-medium">{result.email}</span></div>
-                  <div><span className="text-muted-foreground">{t('register.passwordField')}</span> <span className="font-mono font-medium">{result.password}</span></div>
+                  <div>
+                    <span className="text-muted-foreground">{t('register.emailField')}</span>{' '}
+                    <span className="font-mono font-medium">{result.email}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">{t('register.passwordField')}</span>{' '}
+                    <span className="font-mono font-medium">{result.password}</span>
+                  </div>
                 </div>
                 <Button
                   onClick={importAccount}
@@ -1347,9 +1884,15 @@ export function RegisterPage(): React.JSX.Element {
                   size="sm"
                 >
                   {imported ? (
-                    <><CheckCircle2 className="h-4 w-4 mr-2" />{t('register.imported')}</>
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      {t('register.imported')}
+                    </>
                   ) : (
-                    <><UserPlus className="h-4 w-4 mr-2" />{t('register.importToManager')}</>
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      {t('register.importToManager')}
+                    </>
                   )}
                 </Button>
               </>
@@ -1380,16 +1923,30 @@ export function RegisterPage(): React.JSX.Element {
           <CardContent className="p-0">
             <div className="max-h-48 overflow-y-auto">
               {history.map((item) => (
-                <div key={item.id} className="flex items-center justify-between px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/50 transition-colors">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
+                >
                   <div className="flex items-center gap-3">
-                    {item.status === 'success' ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}
+                    {item.status === 'success' ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
                     <span className="font-mono text-xs">{item.email}</span>
-                    <span className="text-xs text-muted-foreground">{new Date(item.time).toLocaleTimeString()}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(item.time).toLocaleTimeString()}
+                    </span>
                   </div>
                   {item.status === 'success' && item.result?.refreshToken && (
                     <Badge
                       variant="outline"
-                      className={cn('cursor-pointer text-xs', item.imported ? 'text-green-600 border-green-200' : 'text-primary border-primary/30 hover:bg-primary/10')}
+                      className={cn(
+                        'cursor-pointer text-xs',
+                        item.imported
+                          ? 'text-green-600 border-green-200'
+                          : 'text-primary border-primary/30 hover:bg-primary/10'
+                      )}
                       onClick={() => !item.imported && importHistoryItem(item)}
                     >
                       {item.imported ? t('register.imported') : t('register.historyImport')}
@@ -1408,15 +1965,27 @@ export function RegisterPage(): React.JSX.Element {
           <CardHeader className="py-3 border-b">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm">{t('register.log')}</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => { _logs = []; setLogs([]) }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  _logs = []
+                  setLogs([])
+                }}
+              >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div ref={logContainerRef} className="h-48 overflow-y-auto p-3 font-mono text-xs space-y-0.5 bg-muted/20">
+            <div
+              ref={logContainerRef}
+              className="h-48 overflow-y-auto p-3 font-mono text-xs space-y-0.5 bg-muted/20"
+            >
               {logs.map((line, i) => (
-                <div key={i} className="text-muted-foreground leading-relaxed">{line}</div>
+                <div key={i} className="text-muted-foreground leading-relaxed">
+                  {line}
+                </div>
               ))}
             </div>
           </CardContent>
