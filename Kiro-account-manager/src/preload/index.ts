@@ -1115,6 +1115,27 @@ const api = {
     }
   },
 
+  onProxyAccountUpdate: (
+    callback: (update: {
+      id: string
+      accessToken?: string
+      refreshToken?: string
+      expiresAt?: number
+      suspended?: boolean
+      isAvailable?: boolean
+      status?: string
+      lastError?: string
+    }) => void
+  ): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, update: any): void => {
+      callback(update)
+    }
+    ipcRenderer.on('proxy-account-update', handler)
+    return () => {
+      ipcRenderer.removeListener('proxy-account-update', handler)
+    }
+  },
+
   // ============ Usage API 类型设置 ============
 
   // 获取 Usage API 类型
@@ -1612,11 +1633,34 @@ const api = {
   },
 
   registrationGenerateColabProxy: (config: {
-    cdpAddress: string
+    cdpAddress?: string
     formUrl?: string
     cellSelector?: string
   }): Promise<{ success: boolean; proxyUrl?: string; error?: string }> => {
     return ipcRenderer.invoke('registration-generate-colab-proxy', config)
+  },
+
+  registrationGetAutoReplacementConfig: (): Promise<{
+    enabled?: boolean
+    useDDG?: boolean
+    ddgAuthToken?: string
+    ddgGmailEmail?: string
+    ddgGmailAppPassword?: string
+    useTempMailPlus?: boolean
+    tempMailPlusEmail?: string
+    tempMailPlusEpin?: string
+    tempMailPlusDomain?: string
+    proxyUrl?: string
+    generateProxyEachTime?: boolean
+    proxyCdpAddress?: string
+    proxyFormUrl?: string
+    scheduledEnabled?: boolean
+    scheduledIntervalMin?: number
+    scheduledStartTime?: string
+    scheduledEndTime?: string
+    scheduledMethod?: 'browser-ddg' | 'browser-tempmail' | 'browser-moemail'
+  }> => {
+    return ipcRenderer.invoke('registration-get-auto-replacement-config')
   },
 
   registrationSaveAutoReplacementConfig: (config: {
@@ -1633,6 +1677,11 @@ const api = {
     generateProxyEachTime?: boolean
     proxyCdpAddress?: string
     proxyFormUrl?: string
+    scheduledEnabled?: boolean
+    scheduledIntervalMin?: number
+    scheduledStartTime?: string
+    scheduledEndTime?: string
+    scheduledMethod?: 'browser-ddg' | 'browser-tempmail' | 'browser-moemail'
   }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('registration-save-auto-replacement-config', config)
   },

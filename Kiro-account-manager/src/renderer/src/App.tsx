@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { AccountManager } from './components/accounts'
-import { Sidebar, TitleBar, type PageType } from './components/layout'
-import { HomePage, AboutPage, SettingsPage, MachineIdPage, KiroSettingsPage, ProxyPage, KProxyPage, RegisterPage, SubscriptionPage, LogsPage } from './components/pages'
+import { Sidebar, type PageType } from './components/layout'
+import {
+  HomePage,
+  AboutPage,
+  SettingsPage,
+  MachineIdPage,
+  KiroSettingsPage,
+  ProxyPage,
+  KProxyPage,
+  RegisterPage,
+  SubscriptionPage,
+  LogsPage
+} from './components/pages'
 import { UpdateDialog } from './components/UpdateDialog'
 import { CloseConfirmDialog } from './components/CloseConfirmDialog'
 import { useAccountsStore } from './store/accounts'
@@ -10,26 +20,26 @@ import { useAccountsStore } from './store/accounts'
 function App(): React.JSX.Element {
   const [currentPage, setCurrentPage] = useState<PageType>('home')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
-  
-  const { 
-    loadFromStorage, 
-    startAutoTokenRefresh, 
-    stopAutoTokenRefresh, 
-    handleBackgroundRefreshResult, 
+
+  const {
+    loadFromStorage,
+    startAutoTokenRefresh,
+    stopAutoTokenRefresh,
+    handleBackgroundRefreshResult,
     handleBackgroundCheckResult,
     accounts,
     activeAccountId,
     setActiveAccount,
     checkAndRefreshExpiringTokens,
-    updateAccountStatus
+    updateAccount
   } = useAccountsStore()
 
   // 切换到下一个可用账户
   const switchToNextAccount = useCallback(() => {
-    const activeAccounts = Array.from(accounts.values()).filter(acc => acc.status === 'active')
+    const activeAccounts = Array.from(accounts.values()).filter((acc) => acc.status === 'active')
     if (activeAccounts.length <= 1) return
 
-    const currentIndex = activeAccounts.findIndex(acc => acc.id === activeAccountId)
+    const currentIndex = activeAccounts.findIndex((acc) => acc.id === activeAccountId)
     const nextIndex = (currentIndex + 1) % activeAccounts.length
     setActiveAccount(activeAccounts[nextIndex].id)
   }, [accounts, activeAccountId, setActiveAccount])
@@ -37,7 +47,7 @@ function App(): React.JSX.Element {
   // 更新托盘账户信息
   const updateTrayInfo = useCallback(() => {
     // 更新账户列表
-    const accountList = Array.from(accounts.values()).map(acc => ({
+    const accountList = Array.from(accounts.values()).map((acc) => ({
       id: acc.id,
       email: acc.email || 'Unknown',
       idp: acc.idp || 'Unknown',
@@ -55,13 +65,15 @@ function App(): React.JSX.Element {
           idp: activeAccount.idp || 'Unknown',
           status: activeAccount.status,
           subscription: activeAccount.subscription?.title || undefined,
-          usage: activeAccount.usage ? {
-            usedCredits: activeAccount.usage.current || 0,
-            totalCredits: activeAccount.usage.limit || 0,
-            totalRequests: 0,
-            successRequests: 0,
-            failedRequests: 0
-          } : undefined
+          usage: activeAccount.usage
+            ? {
+                usedCredits: activeAccount.usage.current || 0,
+                totalCredits: activeAccount.usage.limit || 0,
+                totalRequests: 0,
+                successRequests: 0,
+                failedRequests: 0
+              }
+            : undefined
         })
       } else {
         window.api.updateTrayAccount(null)
@@ -70,13 +82,13 @@ function App(): React.JSX.Element {
       window.api.updateTrayAccount(null)
     }
   }, [accounts, activeAccountId])
-  
+
   // 应用启动时加载数据并启动自动刷新
   useEffect(() => {
     loadFromStorage().then(() => {
       startAutoTokenRefresh()
     })
-    
+
     return () => {
       stopAutoTokenRefresh()
     }
@@ -108,6 +120,34 @@ function App(): React.JSX.Element {
     }
   }, [switchToNextAccount])
 
+  // 监听反代账号状态更新（例如请求流中发现 suspended）
+  useEffect(() => {
+    const unsubscribe = window.api.onProxyAccountUpdate?.((update) => {
+      if (!update?.id) return
+      const updates: Record<string, unknown> = {}
+      if (update.accessToken || update.refreshToken || update.expiresAt) {
+        const current = useAccountsStore.getState().accounts.get(update.id)
+        updates.credentials = {
+          ...(current?.credentials || {}),
+          ...(update.accessToken ? { accessToken: update.accessToken } : {}),
+          ...(update.refreshToken ? { refreshToken: update.refreshToken } : {}),
+          ...(update.expiresAt ? { expiresAt: update.expiresAt } : {})
+        }
+      }
+      if (update.suspended) {
+        updates.status = 'error'
+        updates.isActive = false
+        updates.lastError =
+          update.lastError || 'Account temporarily suspended or locked by AWS/Kiro'
+        updates.lastCheckedAt = Date.now()
+      }
+      if (Object.keys(updates).length > 0) updateAccount(update.id, updates as any)
+    })
+    return () => {
+      unsubscribe?.()
+    }
+  }, [updateAccount])
+
   // 监听后台刷新结果
   useEffect(() => {
     const unsubscribe = window.api.onBackgroundRefreshResult((data) => {
@@ -127,18 +167,6 @@ function App(): React.JSX.Element {
       unsubscribe()
     }
   }, [handleBackgroundCheckResult])
-
-  // 监听反代账号被封禁事件（TEMPORARILY_SUSPENDED / AccountSuspendedException）
-  // 反代触发后，把封禁状态同步到 store 让 UI 显示
-  useEffect(() => {
-    const unsubscribe = window.api.onProxyAccountSuspended((info) => {
-      console.warn(`[App] Account suspended via proxy: ${info.email || info.id} (${info.reason})`)
-      updateAccountStatus(info.id, 'error', `[${info.reason}] ${info.message}`)
-    })
-    return () => {
-      unsubscribe()
-    }
-  }, [updateAccountStatus])
 
   const renderPage = () => {
     switch (currentPage) {
@@ -170,30 +198,14 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <div className="h-screen ambient-bg overflow-hidden flex flex-col">
-      <TitleBar />
-      <div className="flex-1 min-h-0 flex gap-2 p-2">
-        <Sidebar
-          currentPage={currentPage}
-          onPageChange={setCurrentPage}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <main className="flex-1 min-w-0 overflow-hidden rounded-3xl page-surface">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              className="h-full flex flex-col"
-            >
-              {renderPage()}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
+    <div className="h-screen bg-background flex">
+      <Sidebar
+        currentPage={currentPage}
+        onPageChange={setCurrentPage}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+      <main className="flex-1 overflow-auto">{renderPage()}</main>
       <UpdateDialog />
       <CloseConfirmDialog />
     </div>

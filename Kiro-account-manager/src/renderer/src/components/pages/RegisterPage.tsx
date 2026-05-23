@@ -619,7 +619,7 @@ export function RegisterPage(): React.JSX.Element {
           tempMailPlusEmail: tempMailEmail,
           tempMailPlusEpin: tempMailEpin,
           tempMailPlusDomain: tempMailDomain,
-          proxyUrl: proxyUrl.trim() || undefined,
+          proxyUrl: generateProxyEachTime ? undefined : proxyUrl.trim() || undefined,
           generateProxyEachTime,
           proxyCdpAddress,
           proxyFormUrl
@@ -888,7 +888,7 @@ export function RegisterPage(): React.JSX.Element {
       config.tempMailPlusEpin = tempMailEpin
       config.tempMailPlusDomain = tempMailDomain
     }
-    if (proxyUrl.trim()) config.proxyUrl = proxyUrl.trim()
+    if (!generateProxyEachTime && proxyUrl.trim()) config.proxyUrl = proxyUrl.trim()
     return config
   }, [
     mode,
@@ -898,7 +898,8 @@ export function RegisterPage(): React.JSX.Element {
     tempMailEmail,
     tempMailEpin,
     tempMailDomain,
-    proxyUrl
+    proxyUrl,
+    generateProxyEachTime
   ])
 
   const prepareBrowserConfig = useCallback(
@@ -909,15 +910,19 @@ export function RegisterPage(): React.JSX.Element {
       if (generateProxyEachTime) {
         addLog(isEn ? 'Generating new proxy from Colab...' : '正在从 Colab 生成新代理...')
         const proxyRes = await window.api.registrationGenerateColabProxy({
-          cdpAddress: proxyCdpAddress.trim(),
+          cdpAddress: proxyCdpAddress.trim() || undefined,
           formUrl: proxyFormUrl.trim() || undefined
         })
         if (!proxyRes.success || !proxyRes.proxyUrl) {
-          throw new Error(proxyRes.error || 'Proxy generation failed')
+          addLog(
+            `${isEn ? 'Proxy generation failed, continuing without proxy' : '代理生成失败，将不使用代理继续'}: ${proxyRes.error || 'Proxy generation failed'}`
+          )
+          config.proxyUrl = undefined
+        } else {
+          config.proxyUrl = proxyRes.proxyUrl
+          setProxyUrl(proxyRes.proxyUrl)
+          addLog(`${isEn ? 'Generated proxy' : '已生成代理'}: ${proxyRes.proxyUrl}`)
         }
-        config.proxyUrl = proxyRes.proxyUrl
-        setProxyUrl(proxyRes.proxyUrl)
-        addLog(`${isEn ? 'Generated proxy' : '已生成代理'}: ${proxyRes.proxyUrl}`)
       }
       return config
     },
@@ -1439,7 +1444,7 @@ export function RegisterPage(): React.JSX.Element {
                       ? 'http://user:pass@host:port or socks5://host:port'
                       : 'http://user:pass@host:port 或 socks5://host:port'
                   }
-                  disabled={isRunning || batchRunning}
+                  disabled={isRunning || batchRunning || generateProxyEachTime}
                 />
               </div>
               <div className="flex items-center justify-between rounded-lg border p-3">
@@ -1479,6 +1484,7 @@ export function RegisterPage(): React.JSX.Element {
                   </div>
                 </div>
               )}
+
               <p className="text-xs text-muted-foreground">
                 {isEn
                   ? 'Start Chrome with --remote-debugging-port=9229 and keep the Colab notebook signed in.'
