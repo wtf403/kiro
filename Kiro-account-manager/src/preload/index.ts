@@ -1624,6 +1624,9 @@ const api = {
     tempMailPlusDomain?: string
     moEmailBaseURL?: string
     moEmailAPIKey?: string
+    providedEmailData?: string
+    providedEmailApiKey?: string
+    providedEmailApiBaseURL?: string
     fullName?: string
     password?: string
     proxyUrl?: string
@@ -1650,6 +1653,9 @@ const api = {
     tempMailPlusEmail?: string
     tempMailPlusEpin?: string
     tempMailPlusDomain?: string
+    providedEmailData?: string
+    providedEmailApiKey?: string
+    providedEmailApiBaseURL?: string
     proxyUrl?: string
     generateProxyEachTime?: boolean
     proxyCdpAddress?: string
@@ -1658,7 +1664,11 @@ const api = {
     scheduledIntervalMin?: number
     scheduledStartTime?: string
     scheduledEndTime?: string
-    scheduledMethod?: 'browser-ddg' | 'browser-tempmail' | 'browser-moemail'
+    scheduledMethod?:
+      | 'browser-ddg'
+      | 'browser-tempmail'
+      | 'browser-moemail'
+      | 'browser-provided-email'
   }> => {
     return ipcRenderer.invoke('registration-get-auto-replacement-config')
   },
@@ -1673,6 +1683,9 @@ const api = {
     tempMailPlusEmail?: string
     tempMailPlusEpin?: string
     tempMailPlusDomain?: string
+    providedEmailData?: string
+    providedEmailApiKey?: string
+    providedEmailApiBaseURL?: string
     proxyUrl?: string
     generateProxyEachTime?: boolean
     proxyCdpAddress?: string
@@ -1681,7 +1694,11 @@ const api = {
     scheduledIntervalMin?: number
     scheduledStartTime?: string
     scheduledEndTime?: string
-    scheduledMethod?: 'browser-ddg' | 'browser-tempmail' | 'browser-moemail'
+    scheduledMethod?:
+      | 'browser-ddg'
+      | 'browser-tempmail'
+      | 'browser-moemail'
+      | 'browser-provided-email'
   }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('registration-save-auto-replacement-config', config)
   },

@@ -2,19 +2,38 @@ import { ModuleClient, SessionClient } from 'tlsclientwrapper'
 import { fetch as undiciFetch, ProxyAgent, type RequestInit as UndiciRequestInit } from 'undici'
 import { RegistrationConfig } from './config'
 import { BrowserIdentity, randomIdentity } from './browser-identity'
-import { FingerprintContext, newFPContext, resetPerfTiming, generateFingerprint } from './fingerprint'
+import {
+  FingerprintContext,
+  newFPContext,
+  resetPerfTiming,
+  generateFingerprint
+} from './fingerprint'
 import { encryptPassword } from './jwe'
 import { refreshAppJSConfig } from './xxtea'
 import {
-  DEFAULT_UA, DEFAULT_SEC_UA,
-  visitorId, awsccc, ubidGen, amznFbgId, newUUID, gmtDate,
-  extractParam, splitAfter, saveCookies,
-  getNestedMap, getNestedStringMap
+  DEFAULT_UA,
+  DEFAULT_SEC_UA,
+  visitorId,
+  awsccc,
+  ubidGen,
+  amznFbgId,
+  newUUID,
+  gmtDate,
+  extractParam,
+  splitAfter,
+  saveCookies,
+  getNestedMap,
+  getNestedStringMap
 } from './http-utils'
 import {
-  TempEmailService, MoEmailService, TempMailPlusService,
-  DuckDuckGoEmailService, GmailIMAPAccount,
-  parseOutlookLines, getInboxCount, waitForOTP
+  TempEmailService,
+  MoEmailService,
+  TempMailPlusService,
+  DuckDuckGoEmailService,
+  GmailIMAPAccount,
+  parseOutlookLines,
+  getInboxCount,
+  waitForOTP
 } from './email-service'
 import { getSystemProxy } from '../proxy/systemProxy'
 
@@ -32,6 +51,7 @@ export interface RegistrationResult {
   region?: string
   provider?: string
   verify?: Record<string, unknown>
+  consumedProvidedEmailLine?: string
 }
 
 type StepFn = () => Promise<void>
@@ -89,7 +109,13 @@ export class Registrar {
 
   /** TLS SessionClient 选项 */
   private get sessionOpts() {
-    const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || getSystemProxy() || undefined
+    const proxyUrl =
+      process.env.HTTPS_PROXY ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy ||
+      getSystemProxy() ||
+      undefined
     // Match TLS fingerprint to Chrome 148 UA — rotate between recent Chrome identifiers
     const tlsIds = ['chrome_120', 'chrome_124', 'chrome_131', 'chrome_133'] as const
     const tlsClientIdentifier = tlsIds[Math.floor(Math.random() * tlsIds.length)]
@@ -109,7 +135,9 @@ export class Registrar {
     // 不传 customLibraryPath，让 tlsclientwrapper 自动从 tmpdir 找 dll
     this.moduleClient = new ModuleClient()
     await this.moduleClient.open()
-    this.log('[TLS] open() completed, pool stats: ' + JSON.stringify(this.moduleClient.getPoolStats()))
+    this.log(
+      '[TLS] open() completed, pool stats: ' + JSON.stringify(this.moduleClient.getPoolStats())
+    )
     this.session = new SessionClient(this.moduleClient, this.sessionOpts)
   }
 
@@ -141,14 +169,24 @@ export class Registrar {
       fs.copyFileSync(resourcePath, tmpPath)
       return
     }
-    this.log('[TLS] Library not found in resources, will download from GitHub. Searched: ' + resourcePath)
+    this.log(
+      '[TLS] Library not found in resources, will download from GitHub. Searched: ' + resourcePath
+    )
   }
 
   private async rebuildTlsClient(): Promise<void> {
-    try { await this.session?.destroySession() } catch { /* ignore */ }
+    try {
+      await this.session?.destroySession()
+    } catch {
+      /* ignore */
+    }
     this.session = null
     if (this.moduleClient) {
-      try { await this.moduleClient.terminate() } catch { /* ignore */ }
+      try {
+        await this.moduleClient.terminate()
+      } catch {
+        /* ignore */
+      }
       this.moduleClient = null
     }
     await this.initTlsClient()
@@ -174,15 +212,21 @@ export class Registrar {
 
   private isRecoverableTlsClientError(err: unknown): boolean {
     if (!(err instanceof Error)) return false
-    return err.message.includes('EOF')
-      || err.message.includes('no tls client for modification check')
-      || err.message.includes('failed to modify existing client')
+    return (
+      err.message.includes('EOF') ||
+      err.message.includes('no tls client for modification check') ||
+      err.message.includes('failed to modify existing client')
+    )
   }
 
   /** 清理 TLS 客户端资源 */
   private async cleanup(): Promise<void> {
     if (this.session) {
-      try { await this.session.destroySession() } catch { /* ignore */ }
+      try {
+        await this.session.destroySession()
+      } catch {
+        /* ignore */
+      }
       this.session = null
     }
     if (this.moduleClient) {
@@ -207,12 +251,14 @@ export class Registrar {
   // ============ HTTP 工具方法 ============
 
   private cookieString(): string {
-    return Array.from(this.cookies.entries()).map(([k, v]) => `${k}=${v}`).join('; ')
+    return Array.from(this.cookies.entries())
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ')
   }
 
   private buildHeaders(referer: string, origin: string): Record<string, string> {
     const h: Record<string, string> = {
-      'Accept': 'application/json, text/plain, */*',
+      Accept: 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
       'Content-Type': 'application/json',
@@ -232,19 +278,19 @@ export class Registrar {
 
   private buildProfileHeaders(referer: string): Record<string, string> {
     const h: Record<string, string> = {
-      'Accept': '*/*',
+      Accept: '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Content-Type': 'application/json;charset=UTF-8',
       'User-Agent': DEFAULT_UA,
-      'Origin': this.cfg.profileBase,
-      'Referer': referer,
+      Origin: this.cfg.profileBase,
+      Referer: referer,
       'sec-ch-ua': DEFAULT_SEC_UA,
       'sec-ch-ua-mobile': '?0',
       'sec-ch-ua-platform': '"Windows"',
       'sec-fetch-dest': 'empty',
       'sec-fetch-mode': 'cors',
       'sec-fetch-site': 'same-origin',
-      'priority': 'u=1, i'
+      priority: 'u=1, i'
     }
     const keys = ['awsccc', 'aws-user-profile-ubid', 'amznfbgid', 'i18next']
     if (this.cookies.has('awsd2c-token')) keys.push('awsd2c-token', 'awsd2c-token-c')
@@ -253,50 +299,90 @@ export class Registrar {
     return h
   }
 
-  private async doGet(url: string, headers: Record<string, string>): Promise<{ body: string; status: number; headers: Record<string, string | string[]> }> {
+  private async doGet(
+    url: string,
+    headers: Record<string, string>
+  ): Promise<{ body: string; status: number; headers: Record<string, string | string[]> }> {
     if (!this.session) throw new Error('TLS 客户端未初始化')
     try {
       const resp = await this.session.get(url, { headers })
-      return { body: resp.body || '', status: resp.status, headers: (resp.headers || {}) as Record<string, string | string[]> }
+      return {
+        body: resp.body || '',
+        status: resp.status,
+        headers: (resp.headers || {}) as Record<string, string | string[]>
+      }
     } catch (err: unknown) {
       if (this.isRecoverableTlsClientError(err)) {
-        this.log('[TLS] Recoverable GET error, rebuilding TLS client: ' + (err instanceof Error ? err.message : String(err)))
+        this.log(
+          '[TLS] Recoverable GET error, rebuilding TLS client: ' +
+            (err instanceof Error ? err.message : String(err))
+        )
         await this.rebuildTlsClient()
         const resp = await this.session!.get(url, { headers })
-        return { body: resp.body || '', status: resp.status, headers: (resp.headers || {}) as Record<string, string | string[]> }
+        return {
+          body: resp.body || '',
+          status: resp.status,
+          headers: (resp.headers || {}) as Record<string, string | string[]>
+        }
       }
       throw err
     }
   }
 
-  private async doPost(url: string, payload: unknown, headers: Record<string, string>): Promise<{ body: string; status: number; headers: Record<string, string | string[]> }> {
+  private async doPost(
+    url: string,
+    payload: unknown,
+    headers: Record<string, string>
+  ): Promise<{ body: string; status: number; headers: Record<string, string | string[]> }> {
     if (!this.session) throw new Error('TLS 客户端未初始化')
     const body = JSON.stringify(payload)
     try {
       const resp = await this.session.post(url, body, { headers })
-      return { body: resp.body || '', status: resp.status, headers: (resp.headers || {}) as Record<string, string | string[]> }
+      return {
+        body: resp.body || '',
+        status: resp.status,
+        headers: (resp.headers || {}) as Record<string, string | string[]>
+      }
     } catch (err: unknown) {
       if (this.isRecoverableTlsClientError(err)) {
-        this.log('[TLS] Recoverable POST error, rebuilding TLS client: ' + (err instanceof Error ? err.message : String(err)))
+        this.log(
+          '[TLS] Recoverable POST error, rebuilding TLS client: ' +
+            (err instanceof Error ? err.message : String(err))
+        )
         await this.rebuildTlsClient()
         const resp = await this.session!.post(url, body, { headers })
-        return { body: resp.body || '', status: resp.status, headers: (resp.headers || {}) as Record<string, string | string[]> }
+        return {
+          body: resp.body || '',
+          status: resp.status,
+          headers: (resp.headers || {}) as Record<string, string | string[]>
+        }
       }
       throw err
     }
   }
 
   private parseBody(body: string): Record<string, unknown> {
-    try { return JSON.parse(body) } catch { return {} }
+    try {
+      return JSON.parse(body)
+    } catch {
+      return {}
+    }
   }
 
   private async fetchD2CToken(origin: string, referer: string): Promise<void> {
     const headers: Record<string, string> = {
-      'Accept': '*/*', 'Content-Type': 'application/json',
-      'User-Agent': DEFAULT_UA, 'Origin': origin, 'Referer': referer,
-      'sec-ch-ua': DEFAULT_SEC_UA, 'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"', 'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site', 'priority': 'u=1, i'
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+      'User-Agent': DEFAULT_UA,
+      Origin: origin,
+      Referer: referer,
+      'sec-ch-ua': DEFAULT_SEC_UA,
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'cross-site',
+      priority: 'u=1, i'
     }
     const parts: string[] = []
     if (this.cookies.has('awsccc')) parts.push('awsccc=' + this.cookies.get('awsccc'))
@@ -322,7 +408,9 @@ export class Registrar {
         try {
           const decoded = JSON.parse(Buffer.from(jwtParts[1], 'base64url').toString())
           if (decoded.vid) this.vid = decoded.vid
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
@@ -333,9 +421,16 @@ export class Registrar {
     return this.genFPWithTime(pageType, eventType, 0, emailLen, emailAddr)
   }
 
-  private genFPWithTime(pageType: string, eventType: string, timeOnPage: number, emailLen: number, emailAddr: string): string {
+  private genFPWithTime(
+    pageType: string,
+    eventType: string,
+    timeOnPage: number,
+    emailLen: number,
+    emailAddr: string
+  ): string {
     const did = this.cfg.directoryId
-    let loc = '', ref = ''
+    let loc = '',
+      ref = ''
 
     switch (pageType) {
       case 'signin':
@@ -359,7 +454,17 @@ export class Registrar {
       ref = this.cfg.viewBase + '/'
     }
 
-    return generateFingerprint(this.identity, loc, ref, this.fpCtx, pageType, eventType, timeOnPage, emailLen, emailAddr)
+    return generateFingerprint(
+      this.identity,
+      loc,
+      ref,
+      this.fpCtx,
+      pageType,
+      eventType,
+      timeOnPage,
+      emailLen,
+      emailAddr
+    )
   }
 
   // ============ 注册步骤 ============
@@ -369,11 +474,18 @@ export class Registrar {
     const payload = {
       clientName: 'Amazon Q Developer for command line',
       clientType: 'public',
-      scopes: ['codewhisperer:completions', 'codewhisperer:analysis', 'codewhisperer:conversations', 'codewhisperer:transformations', 'codewhisperer:taskassist']
+      scopes: [
+        'codewhisperer:completions',
+        'codewhisperer:analysis',
+        'codewhisperer:conversations',
+        'codewhisperer:transformations',
+        'codewhisperer:taskassist'
+      ]
     }
     const headers = { 'Content-Type': 'application/json' }
 
-    let resp: { body: string; status: number; headers: Record<string, string | string[]> } | null = null
+    let resp: { body: string; status: number; headers: Record<string, string | string[]> } | null =
+      null
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         resp = await this.doPost(this.cfg.oidcBase + '/client/register', payload, headers)
@@ -397,10 +509,15 @@ export class Registrar {
 
   private async step2Device(): Promise<void> {
     this.log('[2] 设备授权')
-    const resp = await this.doPost(this.cfg.oidcBase + '/device_authorization', {
-      clientId: this.clientId, clientSecret: this.clientSecret,
-      startUrl: this.cfg.startURL
-    }, { 'Content-Type': 'application/json' })
+    const resp = await this.doPost(
+      this.cfg.oidcBase + '/device_authorization',
+      {
+        clientId: this.clientId,
+        clientSecret: this.clientSecret,
+        startUrl: this.cfg.startURL
+      },
+      { 'Content-Type': 'application/json' }
+    )
     const data = this.parseBody(resp.body)
     this.deviceCode = (data.deviceCode as string) || ''
     this.userCode = (data.userCode as string) || ''
@@ -422,11 +539,17 @@ export class Registrar {
 
     if (this.cfg.useTempMailPlus) {
       this.log('[3] 使用自建域名邮箱 (TempMail.Plus)')
-      if (!this.cfg.tempMailPlusEmail || !this.cfg.tempMailPlusEpin || !this.cfg.tempMailPlusDomain) {
+      if (
+        !this.cfg.tempMailPlusEmail ||
+        !this.cfg.tempMailPlusEpin ||
+        !this.cfg.tempMailPlusDomain
+      ) {
         throw new Error('TempMail.Plus 配置不完整')
       }
       this.emailSvc = new TempMailPlusService(
-        this.cfg.tempMailPlusEmail, this.cfg.tempMailPlusEpin, this.cfg.tempMailPlusDomain
+        this.cfg.tempMailPlusEmail,
+        this.cfg.tempMailPlusEpin,
+        this.cfg.tempMailPlusDomain
       )
       this.email = await this.emailSvc.create()
       if (!this.email) throw new Error('生成邮箱地址失败')
@@ -467,11 +590,11 @@ export class Registrar {
     const url = `${this.cfg.portalBase}/login?directory_id=view&redirect_url=${redirect}`
 
     const h: Record<string, string> = {
-      'Accept': 'application/json, text/plain, */*',
+      Accept: 'application/json, text/plain, */*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Content-Type': 'application/json',
-      'Origin': this.cfg.viewBase,
-      'Referer': this.cfg.viewBase + '/',
+      Origin: this.cfg.viewBase,
+      Referer: this.cfg.viewBase + '/',
       'User-Agent': DEFAULT_UA,
       'sec-ch-ua': DEFAULT_SEC_UA,
       'sec-ch-ua-mobile': '?0',
@@ -503,13 +626,20 @@ export class Registrar {
     let fp = this.genFP('signin', 'first_load', 0, '')
     let rid = newUUID()
     let h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    let resp = await this.doPost(api, {
-      stepId: '', workflowStateHandle: this.workflowHandle,
-      inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
-      requestId: rid
-    }, h)
+    let resp = await this.doPost(
+      api,
+      {
+        stepId: '',
+        workflowStateHandle: this.workflowHandle,
+        inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     let data = this.parseBody(resp.body)
     if (data.workflowStateHandle) this.workflowHandle = data.workflowStateHandle as string
@@ -518,13 +648,20 @@ export class Registrar {
       fp = this.genFP('signin', 'PageLoad', 0, '')
       rid = newUUID()
       h = this.buildHeaders(ref, this.cfg.signinBase)
-      h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+      h['x-amzn-requestid'] = rid
+      h['x-amz-date'] = gmtDate()
+      h['priority'] = 'u=1, i'
 
-      resp = await this.doPost(api, {
-        stepId: 'start', workflowStateHandle: this.workflowHandle,
-        inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
-        requestId: rid
-      }, h)
+      resp = await this.doPost(
+        api,
+        {
+          stepId: 'start',
+          workflowStateHandle: this.workflowHandle,
+          inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
+          requestId: rid
+        },
+        h
+      )
       saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
       data = this.parseBody(resp.body)
       if (data.workflowStateHandle) this.workflowHandle = data.workflowStateHandle as string
@@ -538,23 +675,39 @@ export class Registrar {
     const fp = this.genFP('signin', 'PageSubmit', this.email.length, this.email)
     const rid = newUUID()
     const h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    const resp = await this.doPost(api, {
-      stepId: 'get-identity-user', workflowStateHandle: this.workflowHandle,
-      actionId: 'SUBMIT',
-      inputs: [
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'ApplicationTypeRequestInput', applicationType: 'SSO_INDIVIDUAL_ID' },
-        {
-          input_type: 'UserEventRequestInput', directoryId: this.cfg.directoryId,
-          userName: this.email,
-          userEvents: [{ input_type: 'UserEvent', eventType: 'PAGE_SUBMIT', pageName: 'IDENTIFICATION', timeSpentOnPage: 5000 }]
-        },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    const resp = await this.doPost(
+      api,
+      {
+        stepId: 'get-identity-user',
+        workflowStateHandle: this.workflowHandle,
+        actionId: 'SUBMIT',
+        inputs: [
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'ApplicationTypeRequestInput', applicationType: 'SSO_INDIVIDUAL_ID' },
+          {
+            input_type: 'UserEventRequestInput',
+            directoryId: this.cfg.directoryId,
+            userName: this.email,
+            userEvents: [
+              {
+                input_type: 'UserEvent',
+                eventType: 'PAGE_SUBMIT',
+                pageName: 'IDENTIFICATION',
+                timeSpentOnPage: 5000
+              }
+            ]
+          },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     const data = this.parseBody(resp.body)
     if (data.workflowStateHandle) this.workflowHandle = data.workflowStateHandle as string
@@ -571,17 +724,25 @@ export class Registrar {
     const fp = this.genFP('signup', 'PageSubmit', 0, '')
     const rid = newUUID()
     const h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    const resp = await this.doPost(api, {
-      stepId: 'get-identity-user', workflowStateHandle: this.workflowHandle,
-      actionId: 'SIGNUP',
-      inputs: [
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    const resp = await this.doPost(
+      api,
+      {
+        stepId: 'get-identity-user',
+        workflowStateHandle: this.workflowHandle,
+        actionId: 'SIGNUP',
+        inputs: [
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     const data = this.parseBody(resp.body)
     const redir = data.redirect as Record<string, unknown> | undefined
@@ -599,34 +760,53 @@ export class Registrar {
     let fp = this.genFP('signup', 'first_load', 0, '')
     let rid = newUUID()
     let h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    let resp = await this.doPost(api, {
-      stepId: '', workflowStateHandle: this.workflowHandle,
-      inputs: [
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    let resp = await this.doPost(
+      api,
+      {
+        stepId: '',
+        workflowStateHandle: this.workflowHandle,
+        inputs: [
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     let data = this.parseBody(resp.body)
     if (data.workflowStateHandle) this.workflowHandle = data.workflowStateHandle as string
-    if (data.stepId !== 'start') throw new Error(`Signup init 返回意外 stepId: ${data.stepId}, resp status: ${resp.status}, body: ${resp.body.substring(0, 200)}`)
+    if (data.stepId !== 'start')
+      throw new Error(
+        `Signup init 返回意外 stepId: ${data.stepId}, resp status: ${resp.status}, body: ${resp.body.substring(0, 200)}`
+      )
 
     fp = this.genFP('signup', 'PageLoad', 0, '')
     rid = newUUID()
     h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    resp = await this.doPost(api, {
-      stepId: 'start', workflowStateHandle: this.workflowHandle,
-      inputs: [
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    resp = await this.doPost(
+      api,
+      {
+        stepId: 'start',
+        workflowStateHandle: this.workflowHandle,
+        inputs: [
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     data = this.parseBody(resp.body)
     if (data.workflowStateHandle) this.workflowHandle = data.workflowStateHandle as string
@@ -652,9 +832,10 @@ export class Registrar {
 
     const url = `${this.cfg.profileBase}/?workflowID=${this.workflowId}`
     const resp = await this.doGet(url, {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'User-Agent': DEFAULT_UA,
-      'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate'
+      'sec-fetch-dest': 'document',
+      'sec-fetch-mode': 'navigate'
     })
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     resetPerfTiming(this.fpCtx)
@@ -666,22 +847,28 @@ export class Registrar {
     const ref = `${this.cfg.profileBase}/?workflowID=${this.workflowId}`
     const fp = this.genFP('profile', 'PageLoad', 0, '')
 
-    const resp = await this.doPost(this.cfg.profileBase + '/api/start', {
-      workflowID: this.workflowId,
-      browserData: {
-        attributes: {
-          fingerprint: fp,
-          eventTimestamp: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
-          timeSpentOnPage: String(800 + Math.floor(Math.random() * 2200)),
-          eventType: 'PageLoad',
-          ubid: this.ubid, visitorId: this.vid
-        },
-        cookies: {}
-      }
-    }, this.buildProfileHeaders(ref))
+    const resp = await this.doPost(
+      this.cfg.profileBase + '/api/start',
+      {
+        workflowID: this.workflowId,
+        browserData: {
+          attributes: {
+            fingerprint: fp,
+            eventTimestamp: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
+            timeSpentOnPage: String(800 + Math.floor(Math.random() * 2200)),
+            eventType: 'PageLoad',
+            ubid: this.ubid,
+            visitorId: this.vid
+          },
+          cookies: {}
+        }
+      },
+      this.buildProfileHeaders(ref)
+    )
     const data = this.parseBody(resp.body)
     this.workflowState = (data.workflowState as string) || ''
-    if (!this.workflowState) throw new Error(`Profile start 未返回 workflowState: ${resp.body.slice(0, 200)}`)
+    if (!this.workflowState)
+      throw new Error(`Profile start 未返回 workflowState: ${resp.body.slice(0, 200)}`)
   }
 
   private async step9SendOTP(): Promise<void> {
@@ -702,7 +889,13 @@ export class Registrar {
 
     const ref = `${this.cfg.profileBase}/?workflowID=${this.workflowId}`
     const timeOnPage = 5000 + Math.floor(Math.random() * 3001)
-    const fp = this.genFPWithTime('profile', 'PageSubmit', timeOnPage, this.email.length, this.email)
+    const fp = this.genFPWithTime(
+      'profile',
+      'PageSubmit',
+      timeOnPage,
+      this.email.length,
+      this.email
+    )
     const tsp = String(timeOnPage)
 
     const payload = {
@@ -712,15 +905,23 @@ export class Registrar {
         attributes: {
           fingerprint: fp,
           eventTimestamp: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
-          timeSpentOnPage: tsp, pageName: 'EMAIL_COLLECTION',
-          eventType: 'PageSubmit', ubid: this.ubid, visitorId: this.vid
+          timeSpentOnPage: tsp,
+          pageName: 'EMAIL_COLLECTION',
+          eventType: 'PageSubmit',
+          ubid: this.ubid,
+          visitorId: this.vid
         },
         cookies: {}
       }
     }
 
-    const resp = await this.doPost(this.cfg.profileBase + '/api/send-otp', payload, this.buildProfileHeaders(ref))
-    if (resp.status !== 200) throw new Error(`send-otp 失败 (${resp.status}), body: ${resp.body.substring(0, 300)}`)
+    const resp = await this.doPost(
+      this.cfg.profileBase + '/api/send-otp',
+      payload,
+      this.buildProfileHeaders(ref)
+    )
+    if (resp.status !== 200)
+      throw new Error(`send-otp 失败 (${resp.status}), body: ${resp.body.substring(0, 300)}`)
     this.log('验证码已发送')
   }
 
@@ -743,25 +944,32 @@ export class Registrar {
     const ref = `${this.cfg.profileBase}/?workflowID=${this.workflowId}`
     const fp = this.genFP('profile', 'EmailVerification', 0, '')
 
-    const resp = await this.doPost(this.cfg.profileBase + '/api/create-identity', {
-      workflowState: this.workflowState,
-      userData: { email: this.email, fullName: this.cfg.fullName },
-      otpCode: otp,
-      browserData: {
-        attributes: {
-          fingerprint: fp,
-          eventTimestamp: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
-          timeSpentOnPage: String(30000 + Math.floor(Math.random() * 30000)),
-          pageName: 'EMAIL_VERIFICATION',
-          eventType: 'EmailVerification', ubid: this.ubid, visitorId: this.vid
-        },
-        cookies: {}
-      }
-    }, this.buildProfileHeaders(ref))
+    const resp = await this.doPost(
+      this.cfg.profileBase + '/api/create-identity',
+      {
+        workflowState: this.workflowState,
+        userData: { email: this.email, fullName: this.cfg.fullName },
+        otpCode: otp,
+        browserData: {
+          attributes: {
+            fingerprint: fp,
+            eventTimestamp: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z'),
+            timeSpentOnPage: String(30000 + Math.floor(Math.random() * 30000)),
+            pageName: 'EMAIL_VERIFICATION',
+            eventType: 'EmailVerification',
+            ubid: this.ubid,
+            visitorId: this.vid
+          },
+          cookies: {}
+        }
+      },
+      this.buildProfileHeaders(ref)
+    )
     const data = this.parseBody(resp.body)
     this.regCode = (data.registrationCode as string) || ''
     this.signState = (data.signInState as string) || ''
-    if (!this.regCode) throw new Error(`create-identity 未返回 registrationCode: ${resp.body.slice(0, 200)}`)
+    if (!this.regCode)
+      throw new Error(`create-identity 未返回 registrationCode: ${resp.body.slice(0, 200)}`)
   }
 
   private async step12SetPassword(): Promise<void> {
@@ -773,21 +981,36 @@ export class Registrar {
     // 12a: 获取加密公钥
     let rid = newUUID()
     let h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    let resp = await this.doPost(api, {
-      stepId: '', state: this.signState,
-      inputs: [
-        { input_type: 'UserRegistrationRequestInput', registrationCode: this.regCode, state: this.signState },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      requestId: rid
-    }, h)
+    let resp = await this.doPost(
+      api,
+      {
+        stepId: '',
+        state: this.signState,
+        inputs: [
+          {
+            input_type: 'UserRegistrationRequestInput',
+            registrationCode: this.regCode,
+            state: this.signState
+          },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     let data = this.parseBody(resp.body)
     this.workflowHandle = (data.workflowStateHandle as string) || ''
 
-    const encCtx = getNestedMap(data as Record<string, unknown>, 'workflowResponseData', 'encryptionContextResponse')
+    const encCtx = getNestedMap(
+      data as Record<string, unknown>,
+      'workflowResponseData',
+      'encryptionContextResponse'
+    )
     const pubKeyMap = encCtx ? getNestedStringMap(encCtx, 'publicKey') : null
     if (!pubKeyMap?.n) throw new Error(`未获取到加密公钥: ${resp.body.slice(0, 200)}`)
 
@@ -801,18 +1024,30 @@ export class Registrar {
     fp = this.genFP('signup', 'PageSubmit', 0, '')
     rid = newUUID()
     h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    resp = await this.doPost(api, {
-      stepId: 'get-new-password-for-password-creation',
-      workflowStateHandle: this.workflowHandle, actionId: 'SUBMIT',
-      inputs: [
-        { input_type: 'PasswordRequestInput', password: encrypted, successfullyEncrypted: 'SUCCESSFUL' },
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    resp = await this.doPost(
+      api,
+      {
+        stepId: 'get-new-password-for-password-creation',
+        workflowStateHandle: this.workflowHandle,
+        actionId: 'SUBMIT',
+        inputs: [
+          {
+            input_type: 'PasswordRequestInput',
+            password: encrypted,
+            successfullyEncrypted: 'SUCCESSFUL'
+          },
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     data = this.parseBody(resp.body)
 
@@ -833,17 +1068,26 @@ export class Registrar {
     const fp = this.genFP('signin', 'PageLoad', 0, '')
     const rid = newUUID()
     const h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    const resp = await this.doPost(api, {
-      stepId: '', workflowStateHandle: wh,
-      workflowResultHandle: rh, state,
-      inputs: [
-        { input_type: 'UserRequestInput', username: this.email },
-        { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
-      ],
-      visitorId: this.vid, requestId: rid
-    }, h)
+    const resp = await this.doPost(
+      api,
+      {
+        stepId: '',
+        workflowStateHandle: wh,
+        workflowResultHandle: rh,
+        state,
+        inputs: [
+          { input_type: 'UserRequestInput', username: this.email },
+          { input_type: 'FingerPrintRequestInput', fingerPrint: fp }
+        ],
+        visitorId: this.vid,
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     const data = this.parseBody(resp.body)
     if (data.stepId !== 'end-of-workflow-success') throw new Error(`完成工作流失败: ${data.stepId}`)
@@ -865,11 +1109,17 @@ export class Registrar {
     const loginURL = `${this.cfg.portalBase}/login?directory_id=view&redirect_url=${redirectURL}`
 
     const h: Record<string, string> = {
-      'Accept': '*/*', 'User-Agent': DEFAULT_UA,
-      'Origin': this.cfg.viewBase, 'Referer': this.cfg.viewBase + '/',
-      'sec-ch-ua': DEFAULT_SEC_UA, 'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"', 'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site', 'priority': 'u=1, i'
+      Accept: '*/*',
+      'User-Agent': DEFAULT_UA,
+      Origin: this.cfg.viewBase,
+      Referer: this.cfg.viewBase + '/',
+      'sec-ch-ua': DEFAULT_SEC_UA,
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'cross-site',
+      priority: 'u=1, i'
     }
     if (this.cookies.has('awsccc')) h['Cookie'] = 'awsccc=' + this.cookies.get('awsccc')
 
@@ -894,13 +1144,20 @@ export class Registrar {
     let fp = this.genFP('signin', 'PageLoad', 0, '')
     let rid = newUUID()
     let h = this.buildHeaders(ref, this.cfg.signinBase)
-    h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+    h['x-amzn-requestid'] = rid
+    h['x-amz-date'] = gmtDate()
+    h['priority'] = 'u=1, i'
 
-    let resp = await this.doPost(api, {
-      stepId: '', workflowStateHandle: wh,
-      inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
-      requestId: rid
-    }, h)
+    let resp = await this.doPost(
+      api,
+      {
+        stepId: '',
+        workflowStateHandle: wh,
+        inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
+        requestId: rid
+      },
+      h
+    )
     saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
     let data = this.parseBody(resp.body)
     let newWH = (data.workflowStateHandle as string) || wh
@@ -909,13 +1166,20 @@ export class Registrar {
       fp = this.genFP('signin', 'PageLoad', 0, '')
       rid = newUUID()
       h = this.buildHeaders(ref, this.cfg.signinBase)
-      h['x-amzn-requestid'] = rid; h['x-amz-date'] = gmtDate(); h['priority'] = 'u=1, i'
+      h['x-amzn-requestid'] = rid
+      h['x-amz-date'] = gmtDate()
+      h['priority'] = 'u=1, i'
 
-      resp = await this.doPost(api, {
-        stepId: 'start', workflowStateHandle: newWH,
-        inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
-        requestId: rid
-      }, h)
+      resp = await this.doPost(
+        api,
+        {
+          stepId: 'start',
+          workflowStateHandle: newWH,
+          inputs: [{ input_type: 'FingerPrintRequestInput', fingerPrint: fp }],
+          requestId: rid
+        },
+        h
+      )
       saveCookies(this.cookies, resp.headers as Record<string, string | string[] | undefined>)
       data = this.parseBody(resp.body)
     }
@@ -938,14 +1202,16 @@ export class Registrar {
     const startURL = this.cfg.viewBase + '/start/?' + params.toString()
 
     const cookieParts: string[] = []
-    if (this.cookies.has('loginCsrfToken')) cookieParts.push('loginCsrfToken=' + this.cookies.get('loginCsrfToken'))
+    if (this.cookies.has('loginCsrfToken'))
+      cookieParts.push('loginCsrfToken=' + this.cookies.get('loginCsrfToken'))
     if (this.cookies.has('awsccc')) cookieParts.push('awsccc=' + this.cookies.get('awsccc'))
 
     await this.doGet(startURL, {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'User-Agent': DEFAULT_UA,
-      'Referer': this.cfg.signinBase + '/',
-      'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate',
+      Referer: this.cfg.signinBase + '/',
+      'sec-fetch-dest': 'document',
+      'sec-fetch-mode': 'navigate',
       ...(cookieParts.length ? { Cookie: cookieParts.join('; ') } : {})
     })
   }
@@ -956,14 +1222,19 @@ export class Registrar {
     if (!csrf) throw new Error('缺少 loginCsrfToken')
 
     const h: Record<string, string> = {
-      'Accept': 'application/json, text/plain, */*',
+      Accept: 'application/json, text/plain, */*',
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': DEFAULT_UA, 'Origin': this.cfg.viewBase,
-      'Referer': this.cfg.viewBase + '/',
+      'User-Agent': DEFAULT_UA,
+      Origin: this.cfg.viewBase,
+      Referer: this.cfg.viewBase + '/',
       'x-amz-sso-csrf-token': csrf,
-      'sec-ch-ua': DEFAULT_SEC_UA, 'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"', 'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors', 'sec-fetch-site': 'cross-site', 'priority': 'u=1, i'
+      'sec-ch-ua': DEFAULT_SEC_UA,
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'cross-site',
+      priority: 'u=1, i'
     }
     const formData = `authCode=${encodeURIComponent(this.authCode)}&state=${encodeURIComponent(this.ssoState)}&orgId=view`
 
@@ -972,7 +1243,9 @@ export class Registrar {
 
     try {
       for (let retry = 0; retry < 5; retry++) {
-        const resp = await ssoSession.post(this.cfg.portalBase + '/auth/sso-token', formData, { headers: h })
+        const resp = await ssoSession.post(this.cfg.portalBase + '/auth/sso-token', formData, {
+          headers: h
+        })
         const data = JSON.parse(resp.body || '{}')
 
         if (data.token) {
@@ -987,29 +1260,48 @@ export class Registrar {
         throw new Error(`SSO Token 失败: ${resp.body?.slice(0, 200)}`)
       }
     } finally {
-      try { await ssoSession.destroySession() } catch { /* ignore */ }
+      try {
+        await ssoSession.destroySession()
+      } catch {
+        /* ignore */
+      }
     }
 
     if (!this.ssoToken) throw new Error('SSO Token 重试 5 次仍失败')
 
     // Accept device + Associate token
-    let resp = await this.doPost(this.cfg.oidcBase + '/device_authorization/accept_user_code', {
-      userCode: this.userCode, userSessionId: this.ssoToken
-    }, { 'Content-Type': 'application/json' })
+    let resp = await this.doPost(
+      this.cfg.oidcBase + '/device_authorization/accept_user_code',
+      {
+        userCode: this.userCode,
+        userSessionId: this.ssoToken
+      },
+      { 'Content-Type': 'application/json' }
+    )
     const dcData = this.parseBody(resp.body)
     const dc = dcData.deviceContext
 
-    await this.doPost(this.cfg.oidcBase + '/device_authorization/associate_token', {
-      deviceContext: dc, userSessionId: this.ssoToken
-    }, { 'Content-Type': 'application/json' })
+    await this.doPost(
+      this.cfg.oidcBase + '/device_authorization/associate_token',
+      {
+        deviceContext: dc,
+        userSessionId: this.ssoToken
+      },
+      { 'Content-Type': 'application/json' }
+    )
 
     // 轮询 token
     for (let i = 0; i < 30; i++) {
-      resp = await this.doPost(this.cfg.oidcBase + '/token', {
-        clientId: this.clientId, clientSecret: this.clientSecret,
-        deviceCode: this.deviceCode,
-        grantType: 'urn:ietf:params:oauth:grant-type:device_code'
-      }, { 'Content-Type': 'application/json' })
+      resp = await this.doPost(
+        this.cfg.oidcBase + '/token',
+        {
+          clientId: this.clientId,
+          clientSecret: this.clientSecret,
+          deviceCode: this.deviceCode,
+          grantType: 'urn:ietf:params:oauth:grant-type:device_code'
+        },
+        { 'Content-Type': 'application/json' }
+      )
 
       if (resp.status === 200) return this.parseBody(resp.body)
       await sleep(2000)
@@ -1035,8 +1327,14 @@ export class Registrar {
       ]
       for (const s of initSteps) {
         this.checkAborted()
-        try { await s.fn() } catch (err) {
-          return { status: 'failed', email: this.email, error: `[${s.name}] ${(err as Error).message}` }
+        try {
+          await s.fn()
+        } catch (err) {
+          return {
+            status: 'failed',
+            email: this.email,
+            error: `[${s.name}] ${(err as Error).message}`
+          }
         }
       }
 
@@ -1053,15 +1351,27 @@ export class Registrar {
         ]
         for (const s of signupSteps) {
           this.checkAborted()
-          try { await s.fn() } catch (err) {
-            return { status: 'failed', email: this.email, error: `[${s.name}] ${(err as Error).message}` }
+          try {
+            await s.fn()
+          } catch (err) {
+            return {
+              status: 'failed',
+              email: this.email,
+              error: `[${s.name}] ${(err as Error).message}`
+            }
           }
         }
 
         this.checkAborted()
         let otp: string
-        try { otp = await this.step10GetOTP() } catch (err) {
-          return { status: 'failed', email: this.email, error: `[GetOTP] ${(err as Error).message}` }
+        try {
+          otp = await this.step10GetOTP()
+        } catch (err) {
+          return {
+            status: 'failed',
+            email: this.email,
+            error: `[GetOTP] ${(err as Error).message}`
+          }
         }
 
         for (const s of [
@@ -1069,8 +1379,14 @@ export class Registrar {
           { name: 'SetPassword', fn: () => this.step12SetPassword() }
         ] as Array<{ name: string; fn: StepFn }>) {
           this.checkAborted()
-          try { await s.fn() } catch (err) {
-            return { status: 'failed', email: this.email, error: `[${s.name}] ${(err as Error).message}` }
+          try {
+            await s.fn()
+          } catch (err) {
+            return {
+              status: 'failed',
+              email: this.email,
+              error: `[${s.name}] ${(err as Error).message}`
+            }
           }
         }
       } else {
@@ -1078,16 +1394,28 @@ export class Registrar {
       }
 
       this.checkAborted()
-      try { await this.step12_8SSOWorkflow() } catch (err) {
-        return { status: 'failed', email: this.email, error: `[SSOWorkflow] ${(err as Error).message}` }
+      try {
+        await this.step12_8SSOWorkflow()
+      } catch (err) {
+        return {
+          status: 'failed',
+          email: this.email,
+          error: `[SSOWorkflow] ${(err as Error).message}`
+        }
       }
 
       await sleep(2000)
 
       this.checkAborted()
       let awsToken: Record<string, unknown>
-      try { awsToken = await this.step13SSOToken() } catch (err) {
-        return { status: 'failed', email: this.email, error: `[SSOToken] ${(err as Error).message}` }
+      try {
+        awsToken = await this.step13SSOToken()
+      } catch (err) {
+        return {
+          status: 'failed',
+          email: this.email,
+          error: `[SSOToken] ${(err as Error).message}`
+        }
       }
 
       // Do NOT call verifyAlive here — hitting getUsageLimits immediately after account
@@ -1125,7 +1453,10 @@ export class Registrar {
   }
 
   /** 手动模式 - 设置邮箱后继续注册流程到发送 OTP */
-  async runManualPhase2(email: string, fullName?: string): Promise<{ success: boolean; error?: string }> {
+  async runManualPhase2(
+    email: string,
+    fullName?: string
+  ): Promise<{ success: boolean; error?: string }> {
     this.email = email
     if (fullName) this.cfg.fullName = fullName
 
